@@ -1017,19 +1017,21 @@
       const yStage = fit.yStagePercent ?? ringState.y;
       const xImagePercent = clampNumber(((xStage / 100 * imageRect.stageWidth) - imageRect.left) / imageRect.width * 100, 0, 100);
       const yImagePercent = clampNumber(((yStage / 100 * imageRect.stageHeight) - imageRect.top) / imageRect.height * 100, 0, 100);
-      const ringWidthImagePercent = clampNumber((fit.widthPx || ringState.size) / imageRect.width * 100, 3, 35);
+      const fingerWidthPx = fit.fingerWidthPx || fit.widthPx * .72 || ringState.size * .72;
+      const ringWidthPx = fit.widthPx || ringState.size;
+      const ringWidthImagePercent = clampNumber(ringWidthPx / imageRect.width * 100, 3, 18);
       return {
         available: true,
         targetFinger: fingerSelect.value,
         centerImagePercent: { x: Number(xImagePercent.toFixed(2)), y: Number(yImagePercent.toFixed(2)) },
         ringWidthImagePercent: Number(ringWidthImagePercent.toFixed(2)),
-        fingerWidthImagePercent: Number((((fit.fingerWidthPx || fit.widthPx * .72 || ringState.size * .72) / imageRect.width) * 100).toFixed(2)),
+        fingerWidthImagePercent: Number(((fingerWidthPx / imageRect.width) * 100).toFixed(2)),
         perspectiveY: Number((fit.perspectiveY || .86).toFixed(2)),
         farSideSqueeze: Number((fit.farSideSqueeze || .9).toFixed(2)),
         edgeOpacity: Number((fit.edgeOpacity || .88).toFixed(2)),
         outputSize: { width: handPayload.width, height: handPayload.height },
         rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
-        instruction: 'Use GPT Image edit to generate the selected product ring directly on this finger base inside the transparent mask. Preserve everything outside the mask.'
+        instruction: 'Use GPT Image edit to generate a compact jewelry-scale version of the selected product ring directly on this finger base inside the transparent mask. Preserve everything outside the mask.'
       };
     }
 
@@ -1089,17 +1091,18 @@
       const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
       const cx = clampNumber(center.x, 4, 96) / 100 * width;
       const cy = clampNumber(center.y, 4, 96) / 100 * height;
-      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
+      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 10, 4, 18) / 100;
       const fingerPercent = clampNumber(placementGuide.fingerWidthImagePercent || ringPercent * .72 * 100, 4, 22) / 100;
       const fingerWidth = Math.max(44, width * fingerPercent);
-      const segmentLength = Math.max(fingerWidth * 2.75, 118);
+      const ringWidth = Math.max(fingerWidth * 1.05, width * ringPercent);
+      const segmentLength = Math.max(54, Math.min(110, Math.max(fingerWidth * 1.45, ringWidth * .72)));
       const fingerAngle = ((placementGuide.rotationDeg || 0) - 90) * Math.PI / 180;
       return {
         x: cx,
         y: cy,
-        width: fingerWidth * 2.05,
+        width: Math.max(fingerWidth * 1.45, ringWidth * 1.22),
         height: segmentLength,
-        radius: fingerWidth,
+        radius: Math.min(fingerWidth * .72, segmentLength / 2),
         angle: fingerAngle
       };
     }
@@ -1406,8 +1409,8 @@
       const fingerLength = distance(mcpPx, pipPx);
       const baseSpacing = distance(mcpPx, neighborPx);
       const selected = getSelectedVariant();
-      const localFingerWidth = clampNumber(Math.max(fingerLength * 0.32, baseSpacing * 0.46), 28, 96);
-      const width = clampNumber(localFingerWidth * 1.38, 34, 130) * (selected.fitScale || 1);
+      const localFingerWidth = clampNumber(Math.max(fingerLength * 0.28, baseSpacing * 0.42), 24, 82);
+      const width = clampNumber(localFingerWidth * 1.08, 30, 104) * (selected.fitScale || 1);
       const fingerAngle = Math.atan2(pipPx.y - mcpPx.y, pipPx.x - mcpPx.x) * 180 / Math.PI;
       const rotation = normalizeAngle(fingerAngle + 90);
       const depthTilt = clampNumber(1 - Math.abs(pip.z - mcp.z) * 1.4, .72, .96);
