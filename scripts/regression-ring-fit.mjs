@@ -31,6 +31,9 @@ assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images 
 assert(backend.includes('Generate a compact worn ring'), 'Backend prompt must let GPT place a compact ring inside the protected mask.');
 assert(backend.includes('Do not place the ring on the thumb, palm, webbing'), 'Backend prompt must prevent wrong-finger placement.');
 assert(backend.includes('jewelry-scale, not product-photo scale'), 'Backend prompt must prevent oversized catalog-style rings.');
+assert(backend.includes('Image A is the direct edit focus'), 'Backend prompt must treat the hand as Image A and ring as Image B reference.');
+assert(backend.includes('bracelet, wrist, white background'), 'Backend prompt must preserve hand details and background.');
+assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
 assert(html.includes('localFingerWidth * 1.08'), 'Landmark scale should keep the ring close to finger width.');
 assert(html.includes('ringWidthImagePercent || 10'), 'Mask generation should use compact ring defaults.');
 

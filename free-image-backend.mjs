@@ -6,7 +6,7 @@ const PORT = Number(process.env.PORT || 8787);
 const WORKSPACE = resolve(process.cwd());
 const ENV_PATH = resolve(WORKSPACE, '.env.local');
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
-const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || '1024x1024';
+const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
@@ -89,9 +89,10 @@ function buildTryOnPrompt(payload) {
   const targetFingerRule = describeTargetFinger(finger);
 
   return [
-    'Use the OpenAI Images edit behavior: edit the uploaded hand image only within the transparent mask area.',
-    'Outside the mask, keep the user hand photo pixel-identical as much as possible. Do not regenerate skin tone, lighting, background, nails, wrist, hand pose, or unmasked fingers.',
-    'Use the selected catalog ring image as the exact visual reference. Do not imagine a generic ring.',
+    'Image A is the direct edit focus: the uploaded hand photo. Image B is reference only: the selected catalog ring design.',
+    'Edit Image A only within the transparent mask area. Preserve Image A outside the mask.',
+    'Preserve the hand, skin tone, skin texture, nail shape, bracelet, wrist, white background, lighting, camera angle, and hand pose from Image A exactly. Do not regenerate or beautify the hand.',
+    'Use Image B as the exact visual reference for the ring design. Do not imagine a generic ring.',
     `Add this exact ring design (${ringDescription}) onto the ${finger}, matching the reference ring's real proportions, band width, stone or setting type, metal color, stone placement, and style.`,
     targetFingerRule,
     'Generate a compact worn ring inside the transparent finger-base edit area. It should wrap around the finger and sit just above the knuckle bulge at the base of the selected finger.',
@@ -103,7 +104,7 @@ function buildTryOnPrompt(payload) {
     'Blend this ring naturally onto the finger. Add a soft contact shadow directly beneath the band where it meets the skin, add a subtle specular highlight on the top curve of the band matching the photo light direction, and slightly darken the underside of the band.',
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
     'Keep the selected ring design faithful to the product reference: preserve the recognizable silhouette, metal color, stones, setting, and style.',
-    'Return one final photorealistic try-on photo only.',
+    'Return one final photorealistic try-on photo only, keeping the original Image A aspect ratio and composition. Prefer the original 4:3 framing when the uploaded hand photo is 4:3.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
 }
