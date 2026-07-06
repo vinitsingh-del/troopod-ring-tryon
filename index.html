@@ -512,8 +512,8 @@
 
       <aside class="tools">
         <div class="note">
-          <b>GPT guided exact try-on</b>
-          <span>GPT chooses the placement. Canvas creates the final image with the original hand and exact product image.</span>
+          <b>GPT protected try-on</b>
+          <span>GPT Image generates the try-on, then the app restores the original hand and overlays the exact selected product.</span>
         </div>
 
         <div class="ai-panel">
@@ -575,7 +575,7 @@
     </section>
 
     <div class="footer">
-      <span>GPT provides placement geometry only; the final output keeps the original hand photo and selected product image intact.</span>
+      <span>GPT creates the local try-on effect; the final output protects the original hand photo and exact product image.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -905,7 +905,7 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Asking GPT for placement geometry, then rendering the exact final image.');
+      setAiStatus('Asking GPT to generate the try-on, then protecting the original hand and product.');
 
       try {
         let fit;
@@ -918,7 +918,13 @@
         }
         applyLandmarkFit(fit);
         await applySelectedProductCutout();
-        const generated = await renderExactTryOnImage();
+        let gptImage = '';
+        try {
+          gptImage = await generateProtectedGptTryOnImage(fit);
+        } catch (imageError) {
+          console.warn(imageError);
+        }
+        const generated = await renderProtectedTryOnImage(gptImage);
         aiResultSrc = generated;
         aiResult.onload = () => {
           reference.style.display = 'none';
@@ -926,7 +932,7 @@
           ring.style.display = 'none';
           aiResult.style.display = 'block';
           hint.style.display = 'none';
-          setAiStatus(`${getSelectedVariant().name} placed on the selected finger without repainting the hand or product.`);
+          setAiStatus(`${getSelectedVariant().name} generated with GPT guidance, then protected so hand and product stay intact.`);
           showToast('Exact output ready.');
         };
         aiResult.src = generated;
@@ -934,7 +940,7 @@
         console.error(error);
         applyFallbackFit();
         await applySelectedProductCutout();
-        const generated = await renderExactTryOnImage();
+        const generated = await renderProtectedTryOnImage('');
         aiResultSrc = generated;
         aiResult.onload = () => {
           reference.style.display = 'none';
@@ -952,7 +958,40 @@
       }
     });
 
-    async function renderExactTryOnImage() {
+    async function generateProtectedGptTryOnImage(fit) {
+      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
+        throw new Error('Backend URL is not configured for GPT image generation on this hosted page.');
+      }
+      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
+      const variant = getSelectedVariant();
+      const handPayload = await getHandImagePayload();
+      const ringImage = await getProductImageDataUrl(variant.productSrc);
+      const placementGuide = createPlacementGuideFromFit(fit, handPayload);
+      const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          finger: fingerSelect.value,
+          handSide: handSelect.value,
+          ringName: variant.name,
+          ringPrice: variant.price,
+          ringDescription: variant.description,
+          handImage: handPayload.dataUrl,
+          ringImage,
+          maskImage,
+          placementGuide
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `GPT Image generation failed (${response.status}).`);
+      }
+      if (!data.image) throw new Error('GPT Image did not return a try-on image.');
+      return data.image;
+    }
+
+    async function renderProtectedTryOnImage(gptImageSrc = '') {
       const base = await loadDrawable(activeImageSrc);
       const ringImg = await loadDrawable(ringCutout.src);
       const canvas = document.createElement('canvas');
@@ -967,6 +1006,21 @@
       const y = ((ringState.y / 100 * imageRect.stageHeight) - imageRect.top) * scaleToImage;
       const size = ringState.size * scaleToImage;
       const ringHeight = size * (ringImg.naturalHeight / ringImg.naturalWidth);
+
+      if (gptImageSrc) {
+        try {
+          const gptImage = await loadDrawable(gptImageSrc);
+          ctx.save();
+          ctx.globalAlpha = .18;
+          ctx.beginPath();
+          ctx.ellipse(x, y, size * .78, ringHeight * .68, (ringState.rotation || 0) * Math.PI / 180, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(gptImage, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        } catch (error) {
+          console.warn(error);
+        }
+      }
 
       ctx.save();
       ctx.translate(x, y);
@@ -986,6 +1040,64 @@
       ctx.drawImage(ringImg, -size / 2, -ringHeight / 2, size, ringHeight);
       ctx.restore();
 
+      return canvas.toDataURL('image/png');
+    }
+
+    async function getHandImagePayload() {
+      const img = getCurrentHandImage();
+      if (!img.complete || !img.naturalWidth) return { dataUrl: '', width: 0, height: 0 };
+      const maxSide = 1024;
+      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return {
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height
+      };
+    }
+
+    function createPlacementGuideFromFit(fit, handPayload) {
+      const imageRect = getDisplayedImageRect(getCurrentHandImage());
+      const xStage = fit.xStagePercent ?? ringState.x;
+      const yStage = fit.yStagePercent ?? ringState.y;
+      const xImagePercent = clampNumber(((xStage / 100 * imageRect.stageWidth) - imageRect.left) / imageRect.width * 100, 0, 100);
+      const yImagePercent = clampNumber(((yStage / 100 * imageRect.stageHeight) - imageRect.top) / imageRect.height * 100, 0, 100);
+      const ringWidthImagePercent = clampNumber((fit.widthPx || ringState.size) / imageRect.width * 100, 3, 35);
+      return {
+        available: true,
+        targetFinger: fingerSelect.value,
+        centerImagePercent: { x: Number(xImagePercent.toFixed(2)), y: Number(yImagePercent.toFixed(2)) },
+        ringWidthImagePercent: Number(ringWidthImagePercent.toFixed(2)),
+        outputSize: { width: handPayload.width, height: handPayload.height },
+        rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
+        instruction: 'Generate only the local try-on effect within the transparent mask. The final app will restore the original hand and overlay the exact ring product image.'
+      };
+    }
+
+    function createEditMaskDataUrl(width, height, placementGuide) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
+      const cx = clampNumber(center.x, 4, 96) / 100 * canvas.width;
+      const cy = clampNumber(center.y, 4, 96) / 100 * canvas.height;
+      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
+      const radiusX = Math.max(56, canvas.width * ringPercent * 1.7);
+      const radiusY = Math.max(42, radiusX * .68);
+
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       return canvas.toDataURL('image/png');
     }
 
