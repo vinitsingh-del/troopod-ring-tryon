@@ -512,8 +512,8 @@
 
       <aside class="tools">
         <div class="note">
-          <b>GPT Image try-on</b>
-          <span>Upload a hand photo, choose a catalog ring, and GPT Image generates the final photo with that product placed on the selected finger.</span>
+          <b>Exact product try-on</b>
+          <span>Upload a hand photo, choose a catalog ring, and the app places that exact product image without repainting the hand.</span>
         </div>
 
         <div class="ai-panel">
@@ -575,7 +575,7 @@
     </section>
 
     <div class="footer">
-      <span>GPT Image uses the uploaded hand and selected product image to create the final try-on photo.</span>
+      <span>The final output keeps the original hand photo and selected product image intact.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -729,7 +729,7 @@
       stage.dataset.fitTap = '0';
       ringState = { ...defaultRing };
       applyRing();
-      setAiStatus('Upload a hand image, choose the product and finger, then generate the try-on image.');
+      setAiStatus('Upload a hand image, choose the product and finger, then create the exact try-on image.');
     }
 
     variantList.addEventListener('click', event => {
@@ -894,10 +894,10 @@
 
     aiGenerateBtn.addEventListener('click', async () => {
       aiGenerateBtn.disabled = true;
-      aiGenerateBtn.textContent = 'Generating...';
+      aiGenerateBtn.textContent = 'Fitting...';
       stopCamera();
       if (!activeImageSrc) {
-        setAiStatus('Upload a hand image first so GPT Image can place the product on that hand.');
+        setAiStatus('Upload a hand image first so the product can be placed onto that hand.');
         showToast('Upload a hand image first.');
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
@@ -905,10 +905,13 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Reading the finger placement and generating the final GPT Image output.');
+      setAiStatus('Detecting the finger and creating the final image without changing the hand or product.');
 
       try {
-        const generated = await generateRingImage();
+        const fit = await generateLandmarkFit();
+        applyLandmarkFit(fit);
+        await applySelectedProductCutout();
+        const generated = await renderExactTryOnImage();
         aiResultSrc = generated;
         aiResult.onload = () => {
           reference.style.display = 'none';
@@ -916,143 +919,67 @@
           ring.style.display = 'none';
           aiResult.style.display = 'block';
           hint.style.display = 'none';
-          setAiStatus(`${getSelectedVariant().name} generated on the selected finger. Download Preview saves this GPT Image result.`);
-          showToast('Output generated.');
+          setAiStatus(`${getSelectedVariant().name} placed on the selected finger without repainting the hand or product.`);
+          showToast('Exact output ready.');
         };
         aiResult.src = generated;
       } catch (error) {
         console.error(error);
-        showCurrentHandImage();
-        setAiStatus(error.message || 'Could not generate the final try-on image.');
-        showToast(error.message || 'Generation failed.');
+        applyFallbackFit();
+        await applySelectedProductCutout();
+        const generated = await renderExactTryOnImage();
+        aiResultSrc = generated;
+        aiResult.onload = () => {
+          reference.style.display = 'none';
+          finger.style.display = 'none';
+          ring.style.display = 'none';
+          aiResult.style.display = 'block';
+          hint.style.display = 'none';
+          setAiStatus('Exact output created with fallback placement. Use a clear top-view hand photo for better automatic fit.');
+          showToast('Exact output ready.');
+        };
+        aiResult.src = generated;
       } finally {
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
       }
     });
 
-    async function generateRingImage() {
-      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
-        throw new Error('Backend URL is not configured for this hosted page.');
-      }
-      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
-      const variant = getSelectedVariant();
-      const placementGuide = await getPlacementGuide();
-      const handPayload = await getHandImagePayload();
-      const ringImage = await getProductImageDataUrl(variant.productSrc);
-      const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          finger: fingerSelect.value,
-          handSide: handSelect.value,
-          ringName: variant.name,
-          ringPrice: variant.price,
-          ringDescription: variant.description,
-          handImage: handPayload.dataUrl,
-          ringImage,
-          maskImage,
-          placementGuide
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `Image backend failed (${response.status}).`);
-      }
-      if (!data.image) throw new Error('Image backend did not return a generated image.');
-      return data.image;
-    }
-
-    async function getHandImagePayload() {
-      const img = getCurrentHandImage();
-      if (!img.complete || !img.naturalWidth) return { dataUrl: '', width: 0, height: 0 };
-      const maxSide = 1024;
-      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    async function renderExactTryOnImage() {
+      const base = await loadDrawable(activeImageSrc);
+      const ringImg = await loadDrawable(ringCutout.src);
       const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      canvas.width = base.naturalWidth;
+      canvas.height = base.naturalHeight;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return {
-        dataUrl: canvas.toDataURL('image/png'),
-        width: canvas.width,
-        height: canvas.height
-      };
-    }
+      ctx.drawImage(base, 0, 0);
 
-    async function getProductImageDataUrl(src) {
-      const img = await loadDrawable(src);
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      return canvas.toDataURL('image/png');
-    }
+      const imageRect = getDisplayedImageRect(getCurrentHandImage());
+      const scaleToImage = base.naturalWidth / imageRect.width;
+      const x = ((ringState.x / 100 * imageRect.stageWidth) - imageRect.left) * scaleToImage;
+      const y = ((ringState.y / 100 * imageRect.stageHeight) - imageRect.top) * scaleToImage;
+      const size = ringState.size * scaleToImage;
+      const ringHeight = size * (ringImg.naturalHeight / ringImg.naturalWidth);
 
-    async function getPlacementGuide() {
-      try {
-        const fit = await generateLandmarkFit();
-        return {
-          available: true,
-          targetFinger: fingerSelect.value,
-          centerStagePercent: {
-            x: Number(fit.xStagePercent.toFixed(2)),
-            y: Number(fit.yStagePercent.toFixed(2))
-          },
-          centerImagePercent: {
-            x: Number((fit.xImagePercent ?? fit.xStagePercent).toFixed(2)),
-            y: Number((fit.yImagePercent ?? fit.yStagePercent).toFixed(2))
-          },
-          ringWidthImagePercent: Number((fit.widthImagePercent || 10).toFixed(2)),
-          ringWidthPx: Math.round(fit.widthPx),
-          rotationDeg: Number(fit.rotationDeg.toFixed(1)),
-          instruction: 'Place the selected product ring centered at these coordinates on the selected finger base. Match this rotation and scale. The ring must wrap naturally around the finger with realistic occlusion and contact shadow.'
-        };
-      } catch {
-        return {
-          available: false,
-          targetFinger: fingerSelect.value,
-          centerImagePercent: getFallbackMaskCenter(),
-          ringWidthImagePercent: 12,
-          instruction: 'No reliable landmarks were detected. Place the selected product ring at the base of the selected finger, below the first knuckle, with natural wrap, occlusion, and contact shadow.'
-        };
-      }
-    }
-
-    function createEditMaskDataUrl(width, height, placementGuide) {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, width);
-      canvas.height = Math.max(1, height);
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const center = placementGuide.centerImagePercent || getFallbackMaskCenter();
-      const cx = clampNumber(center.x, 4, 96) / 100 * canvas.width;
-      const cy = clampNumber(center.y, 4, 96) / 100 * canvas.height;
-      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
-      const radiusX = Math.max(56, canvas.width * ringPercent * 1.8);
-      const radiusY = Math.max(42, radiusX * .72);
-
-      ctx.globalCompositeOperation = 'destination-out';
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((ringState.rotation || 0) * Math.PI / 180);
+      ctx.save();
+      ctx.translate(0, ringHeight * .23);
+      ctx.scale(1, .34);
+      const shadowGradient = ctx.createRadialGradient(0, 0, size * .08, 0, 0, size * .42);
+      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .26)');
+      shadowGradient.addColorStop(.55, 'rgba(48, 28, 20, .12)');
+      shadowGradient.addColorStop(1, 'rgba(48, 28, 20, 0)');
+      ctx.fillStyle = shadowGradient;
       ctx.beginPath();
-      ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, size * .44, ringHeight * .52, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-      return canvas.toDataURL('image/png');
-    }
+      ctx.restore();
+      ctx.drawImage(ringImg, -size / 2, -ringHeight / 2, size, ringHeight);
+      ctx.restore();
 
-    function getFallbackMaskCenter() {
-      const presets = {
-        thumb: { x: 79, y: 59 },
-        'index finger': { x: 37, y: 50 },
-        'middle finger': { x: 49, y: 47 },
-        'ring finger': { x: 44.6, y: 48.2 },
-        'little finger': { x: 66, y: 58 }
-      };
-      return presets[fingerSelect.value] || presets['ring finger'];
+      return canvas.toDataURL('image/png');
     }
 
     ring.addEventListener('pointerdown', event => {
