@@ -923,8 +923,11 @@
       } catch (error) {
         console.error(error);
         showCurrentHandImage();
-        setAiStatus(error.message || 'TROOLLM Image could not generate the try-on output.');
-        showToast('TROOLLM generation failed.');
+        const billingIssue = /billing|hard limit|quota|credits|insufficient/i.test(error.message || '');
+        setAiStatus(billingIssue
+          ? 'OpenAI billing limit reached. Add credits or raise the project limit, then try Fit Product again.'
+          : (error.message || 'TROOLLM Image could not generate the try-on output.'));
+        showToast(billingIssue ? 'Billing limit reached.' : 'TROOLLM generation failed.');
       } finally {
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';

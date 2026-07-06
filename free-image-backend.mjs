@@ -51,6 +51,12 @@ function sendText(res, status, text, contentType = 'text/plain; charset=utf-8') 
   res.end(text);
 }
 
+function statusForError(message = '') {
+  if (/billing|hard limit|quota|credits|insufficient/i.test(message)) return 402;
+  if (/api key|configured/i.test(message)) return 503;
+  return 500;
+}
+
 function readJson(req) {
   return new Promise((resolveBody, rejectBody) => {
     let body = '';
@@ -313,7 +319,7 @@ async function handlePlaceRing(req, res) {
     const result = await callOpenAIPlacement(payload);
     sendJson(res, 200, result);
   } catch (error) {
-    const status = /api key|configured/i.test(error.message) ? 503 : 500;
+    const status = statusForError(error.message);
     sendJson(res, status, { error: error.message || 'Placement failed.' });
   }
 }
@@ -341,7 +347,7 @@ export async function handleFitRing(req, res) {
     const result = await callOpenAIImageGeneration(payload);
     sendJson(res, 200, result);
   } catch (error) {
-    const status = /api key|configured/i.test(error.message) ? 503 : 500;
+    const status = statusForError(error.message);
     sendJson(res, status, { error: error.message || 'Image generation failed.' });
   }
 }

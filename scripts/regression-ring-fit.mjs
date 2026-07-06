@@ -40,6 +40,10 @@ assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'a
 assert(html.includes("'ring finger': { x: 45.5, y: 40.5, w: 13, h: 8.6"), 'Ring-finger mask should use the visually tested snug placement zone.');
 assert(html.includes('const maxSide = 832'), 'Hand upload should be resized for faster fitting.');
 assert(html.includes("canvas.toDataURL('image/jpeg', .9)"), 'Hand upload should use compressed JPEG for faster fitting.');
+assert(backend.includes('function statusForError'), 'Backend must classify provider error statuses.');
+assert(backend.includes('return 402'), 'Backend must return 402 for billing/quota failures.');
+assert(html.includes('OpenAI billing limit reached'), 'Frontend must show billing-limit failures clearly.');
+assert(html.includes('Billing limit reached.'), 'Frontend toast must show billing-limit failures clearly.');
 assert(backend.includes('slim worn chevron band'), 'Backend prompt should keep the ring small and neatly worn.');
 assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
 assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');
