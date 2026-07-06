@@ -20,28 +20,23 @@ function assert(condition, message) {
 
 assert(existsSync(beforePath), 'Missing reference before image.');
 assert(existsSync(afterPath), 'Missing reference after image.');
-assert(html.includes('getFingerSegmentMaskGeometry'), 'Missing finger-segment mask geometry.');
-assert(html.includes('Use GPT Image edit to generate a compact jewelry-scale version'), 'Frontend must request compact GPT-led ring fitting.');
-assert(!html.includes('draftImage,'), 'Frontend should not send a rough ring overlay as the edit base.');
+assert(html.includes('createSimpleRingMaskDataUrl'), 'Frontend must create the simple GPT edit mask.');
+assert(html.includes('const maskImage = createSimpleRingMaskDataUrl'), 'Frontend must use the simple mask for GPT generation.');
+assert(!html.includes('generateLandmarkFit'), 'Frontend should not use hand landmark logic.');
+assert(!html.includes('generateGptPlacementFit'), 'Frontend should not use GPT placement pre-pass.');
+assert(!html.includes('createDraftCompositeDataUrl'), 'Frontend should not create a rough ring overlay.');
+assert(!html.includes('placementGuide'), 'Frontend should not send placement-guide logic.');
 assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve backend endpoints for hosted and local pages.');
 assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
-assert(html.indexOf('fit = await generateLandmarkFit()') < html.indexOf('fit = await generateGptPlacementFit()'), 'Frontend must use hand landmarks before GPT placement fallback.');
 assert(!html.includes('TROOLLM Image uses the uploaded hand'), 'Frontend should not show the removed explanatory note.');
-assert(html.includes('warmHandDetector()'), 'Frontend should warm hand detection after upload for faster fitting.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
 assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'low'"), 'Image quality should default to low for faster generation.');
 assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images edit must use the original hand as the base image.');
-assert(backend.includes('Generate a compact worn ring'), 'Backend prompt must let GPT place a compact ring inside the protected mask.');
-assert(backend.includes('Do not place the ring on the thumb, palm, webbing'), 'Backend prompt must prevent wrong-finger placement.');
-assert(backend.includes('jewelry-scale, not product-photo scale'), 'Backend prompt must prevent oversized catalog-style rings.');
-assert(backend.includes('Image A is the direct edit focus'), 'Backend prompt must treat the hand as Image A and ring as Image B reference.');
-assert(backend.includes('bracelet or watch at the wrist'), 'Backend prompt must preserve hand details and wrist jewelry.');
-assert(backend.includes('gold chevron/V silhouette'), 'Backend prompt must preserve the chevron ring design.');
-assert(backend.includes('small bead-like gold detailing'), 'Backend prompt must preserve ring product details.');
-assert(backend.includes('properly centered at the base-to-middle area'), 'Backend prompt must emphasize natural ring-finger fit.');
+assert(backend.includes('You are performing a realistic jewelry virtual try-on edit.'), 'Backend must use the clean GPT-only prompt.');
+assert(backend.includes('Mask: only the small ring-placement zone'), 'Backend prompt must describe the edit mask.');
+assert(backend.includes('Do not redesign the ring'), 'Backend prompt must protect product design.');
+assert(backend.includes('No full image regeneration'), 'Backend prompt must prevent full-image regeneration.');
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
-assert(html.includes('localFingerWidth * 1.08'), 'Landmark scale should keep the ring close to finger width.');
-assert(html.includes('ringWidthImagePercent || 10'), 'Mask generation should use compact ring defaults.');
 
 const before = dimensions(beforePath);
 const after = dimensions(afterPath);

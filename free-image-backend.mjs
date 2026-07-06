@@ -80,45 +80,49 @@ function buildTryOnPrompt(payload) {
   const handSide = payload.handSide || 'auto-detect';
   const ringName = payload.ringName || 'selected MIA ring';
   const ringDescription = payload.ringDescription || ringName;
-  const handPose = handSide === 'auto-detect'
-    ? 'Use the uploaded hand pose and camera angle.'
-    : `Use the uploaded ${handSide} pose and camera angle.`;
-  const placementGuide = payload.placementGuide
-    ? `Finger placement guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Use this only to identify the correct finger base and approximate scale. You may adjust the ring within the transparent mask so it sits naturally.`
-    : 'Infer the selected finger base visually from the uploaded hand image.';
-  const targetFingerRule = describeTargetFinger(finger);
 
   return [
-    'Image A is the direct edit focus: the uploaded hand photo. Image B is reference only: the selected catalog ring design.',
-    'Edit Image A only within the transparent mask area. Preserve Image A outside the mask.',
-    'Preserve the same hand, pose, skin tone, skin texture, manicured nail shape, bracelet or watch at the wrist, soft lighting, clean light or white background, and camera angle from Image A exactly. Do not regenerate, beautify, reshape, recolor, or relight the hand.',
-    'Use Image B as the exact visual reference for the ring design. Do not imagine a generic ring.',
-    `Add this exact ring design (${ringDescription}) onto the ${finger}, matching the reference ring's real proportions, band width, stone or setting type, metal color, stone placement, and style.`,
-    'If the selected reference is the gold geometric chevron or V-shaped ring, preserve the exact gold chevron/V silhouette, small bead-like gold detailing, and white stone or pavé edge.',
-    targetFingerRule,
-    'Generate a compact worn ring inside the transparent finger-base edit area. Reposition and refine the ring so it sits naturally and snugly, properly centered at the base-to-middle area of the selected finger, just above the knuckle bulge.',
-    handPose,
-    placementGuide,
-    'Choose the exact final size, rotation, and occlusion needed for the ring to be physically worn on the finger. Match finger curvature, perspective, and camera angle.',
-    'The ring must be jewelry-scale, not product-photo scale. Keep the visible ring compact: do not let decorative points, V shapes, stones, or band edges extend far down the finger or onto the palm.',
-    'The ring should span roughly the finger width at the placement point with only a small margin on each side.',
-    'Blend this ring naturally onto the finger. Add realistic contact where metal touches skin, soft shadows directly beneath the band, a subtle specular highlight matching the photo light direction, and slightly darken the underside of the band.',
-    'The ring must look like it truly fits the finger: neat, snug, centered, correctly scaled, aligned to the finger axis, and physically worn around it, not floating and not pasted on top.',
-    'Keep the selected ring design faithful to the product reference: preserve the recognizable silhouette, metal color, stones, setting, and style.',
-    'Return one final photorealistic try-on photo only, keeping the original Image A aspect ratio and composition. Prefer the original 4:3 framing when the uploaded hand photo is 4:3.',
-    'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
+    'You are performing a realistic jewelry virtual try-on edit.',
+    '',
+    'INPUTS:',
+    '1. Base image: a real customer hand photo.',
+    `2. Product reference image: the selected ring (${ringName}: ${ringDescription}).`,
+    '3. Mask: only the small ring-placement zone on the selected finger is editable.',
+    '',
+    'TASK:',
+    'Place the selected ring from the product reference image onto the selected finger in the base hand photo.',
+    '',
+    'STRICT RULES:',
+    '- Preserve the original hand photo exactly.',
+    '- Do not change the hand shape, skin tone, nails, fingers, wrist, bracelet, background, lighting, camera angle, crop, or image quality.',
+    '- Edit only inside the masked ring-placement area.',
+    '- Remove any existing ring/band only if it is inside the masked area.',
+    '- Do not redesign the ring.',
+    '- Do not create a new ring style.',
+    '- Do not change the product design, metal color, gemstone placement, stone color, bead detailing, pavé line, or shape.',
+    '- The ring must look physically worn on the finger, not pasted on top.',
+    '- The ring must wrap around the finger naturally with correct curvature.',
+    '- The ring must be centered on the selected finger.',
+    '- The ring must match the finger width and perspective.',
+    '- The front visible design of the ring should face the camera clearly.',
+    '- Add realistic contact shadows under the ring.',
+    '- Add natural highlights and reflections matching the lighting of the hand photo.',
+    '- Slightly hide/occlude the back/lower parts of the ring where they would go behind the finger.',
+    '- Maintain realistic scale: the ring should sit snugly around the finger, neither floating nor oversized.',
+    '- Keep the final output like a real e-commerce jewelry try-on photograph.',
+    '',
+    'PLACEMENT:',
+    `Selected finger: ${finger}`,
+    `Hand side: ${handSide}`,
+    'Ring position: place the ring at the natural ring-wearing area between the lower finger joint and the base of the finger.',
+    'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
+    '',
+    'QUALITY TARGET:',
+    'Photorealistic, natural, clean, realistic jewelry fitting, no distortion, no extra fingers, no warped nails, no changed background, no cartoon effect.',
+    '',
+    'NEGATIVE INSTRUCTIONS:',
+    'No floating ring. No flat sticker look. No oversized product. No melted jewelry. No duplicate rings. No extra gemstones. No changed hand. No changed nails. No changed skin texture. No full image regeneration.'
   ].join(' ');
-}
-
-function describeTargetFinger(finger) {
-  const rules = {
-    'ring finger': 'Target only the ring finger: the fourth finger, between the middle finger and little finger. Do not place the ring on the thumb, palm, webbing, index finger, or wrist.',
-    'index finger': 'Target only the index finger: the finger next to the thumb. Do not place the ring on the thumb, palm, webbing, middle finger, or wrist.',
-    'middle finger': 'Target only the middle finger: the central longest finger. Do not place the ring on the thumb, palm, webbing, index finger, ring finger, or wrist.',
-    'little finger': 'Target only the little finger: the smallest outer finger. Do not place the ring on the thumb, palm, webbing, ring finger, or wrist.',
-    thumb: 'Target only the thumb. Do not place the ring on the palm, webbing, wrist, or other fingers.'
-  };
-  return rules[finger] || rules['ring finger'];
 }
 
 function imageFromDataUrl(dataUrl, fallbackName = 'image') {

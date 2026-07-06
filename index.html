@@ -705,7 +705,6 @@
         stage.dataset.fitTap = '0';
         setAiStatus(`Choose the finger, then tap Fit Product for ${getSelectedVariant().name}.`);
         showToast('Photo ready. Choose the ring and finger.');
-        warmHandDetector();
       };
       finger.onerror = () => {
         showToast('This image could not be loaded. Try JPG or PNG.');
@@ -905,20 +904,11 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Detecting the selected finger first, then asking TROOLLM Image to generate the ring only in that area.');
+      setAiStatus('Asking TROOLLM Image to place the selected ring on the selected finger.');
 
       try {
-        let fit;
-        try {
-          fit = await generateLandmarkFit();
-        } catch (landmarkError) {
-          console.warn(landmarkError);
-          setAiStatus('Hand detection was unavailable, asking TROOLLM for the selected finger location.');
-          fit = await generateGptPlacementFit();
-        }
-        applyLandmarkFit(fit);
         await applySelectedProductCutout();
-        const generated = await generateFullGptTryOnImage(fit);
+        const generated = await generateFullGptTryOnImage();
         aiResultSrc = generated;
         aiResult.onload = () => {
           reference.style.display = 'none';
@@ -932,45 +922,21 @@
         aiResult.src = generated;
       } catch (error) {
         console.error(error);
-        try {
-          applyFallbackFit();
-          await applySelectedProductCutout();
-          const generated = await generateFullGptTryOnImage({
-            xStagePercent: ringState.x,
-            yStagePercent: ringState.y,
-            widthPx: ringState.size,
-            rotationDeg: ringState.rotation
-          });
-          aiResultSrc = generated;
-          aiResult.onload = () => {
-            reference.style.display = 'none';
-            finger.style.display = 'none';
-            ring.style.display = 'none';
-            aiResult.style.display = 'block';
-            hint.style.display = 'none';
-            setAiStatus('TROOLLM output created with fallback placement. Use a clear top-view hand photo for better automatic fit.');
-            showToast('TROOLLM output ready.');
-          };
-          aiResult.src = generated;
-        } catch (fallbackError) {
-          console.error(fallbackError);
-          showCurrentHandImage();
-          setAiStatus(fallbackError.message || error.message || 'TROOLLM Image could not generate the try-on output.');
-          showToast('TROOLLM generation failed.');
-        }
+        showCurrentHandImage();
+        setAiStatus(error.message || 'TROOLLM Image could not generate the try-on output.');
+        showToast('TROOLLM generation failed.');
       } finally {
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
       }
     });
 
-    async function generateFullGptTryOnImage(fit) {
+    async function generateFullGptTryOnImage() {
       const endpoint = getBackendEndpoint('/api/fit-ring');
       const variant = getSelectedVariant();
       const handPayload = await getHandImagePayload();
       const ringImage = await getProductImageDataUrl(variant.productSrc);
-      const placementGuide = createPlacementGuideFromFit(fit, handPayload);
-      const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
+      const maskImage = createSimpleRingMaskDataUrl(handPayload.width, handPayload.height);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -982,8 +948,7 @@
           ringDescription: variant.description,
           handImage: handPayload.dataUrl,
           ringImage,
-          maskImage,
-          placementGuide
+          maskImage
         })
       });
       const data = await response.json().catch(() => ({}));
@@ -1011,31 +976,7 @@
       };
     }
 
-    function createPlacementGuideFromFit(fit, handPayload) {
-      const imageRect = getDisplayedImageRect(getCurrentHandImage());
-      const xStage = fit.xStagePercent ?? ringState.x;
-      const yStage = fit.yStagePercent ?? ringState.y;
-      const xImagePercent = clampNumber(((xStage / 100 * imageRect.stageWidth) - imageRect.left) / imageRect.width * 100, 0, 100);
-      const yImagePercent = clampNumber(((yStage / 100 * imageRect.stageHeight) - imageRect.top) / imageRect.height * 100, 0, 100);
-      const fingerWidthPx = fit.fingerWidthPx || fit.widthPx * .72 || ringState.size * .72;
-      const ringWidthPx = fit.widthPx || ringState.size;
-      const ringWidthImagePercent = clampNumber(ringWidthPx / imageRect.width * 100, 3, 18);
-      return {
-        available: true,
-        targetFinger: fingerSelect.value,
-        centerImagePercent: { x: Number(xImagePercent.toFixed(2)), y: Number(yImagePercent.toFixed(2)) },
-        ringWidthImagePercent: Number(ringWidthImagePercent.toFixed(2)),
-        fingerWidthImagePercent: Number(((fingerWidthPx / imageRect.width) * 100).toFixed(2)),
-        perspectiveY: Number((fit.perspectiveY || .86).toFixed(2)),
-        farSideSqueeze: Number((fit.farSideSqueeze || .9).toFixed(2)),
-        edgeOpacity: Number((fit.edgeOpacity || .88).toFixed(2)),
-        outputSize: { width: handPayload.width, height: handPayload.height },
-        rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
-        instruction: 'Use GPT Image edit to generate a compact jewelry-scale version of the selected product ring directly on this finger base inside the transparent mask. Preserve everything outside the mask.'
-      };
-    }
-
-    function createEditMaskDataUrl(width, height, placementGuide) {
+    function createSimpleRingMaskDataUrl(width, height) {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, width);
       canvas.height = Math.max(1, height);
@@ -1043,160 +984,29 @@
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const segment = getFingerSegmentMaskGeometry(canvas.width, canvas.height, placementGuide);
+      const zones = {
+        thumb: { x: 76, y: 58, w: 18, h: 12, r: -18 },
+        'index finger': { x: 34, y: 42, w: 17, h: 11, r: -10 },
+        'middle finger': { x: 46, y: 39, w: 17, h: 11, r: -3 },
+        'ring finger': { x: 39, y: 43, w: 17, h: 11, r: 5 },
+        'little finger': { x: 25, y: 49, w: 16, h: 10, r: 14 }
+      };
+      const zone = zones[fingerSelect.value] || zones['ring finger'];
+      const cx = zone.x / 100 * canvas.width;
+      const cy = zone.y / 100 * canvas.height;
+      const maskWidth = zone.w / 100 * canvas.width;
+      const maskHeight = zone.h / 100 * canvas.height;
 
       ctx.globalCompositeOperation = 'destination-out';
-      drawRoundedCapsule(ctx, segment);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(zone.r * Math.PI / 180);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, maskWidth / 2, maskHeight / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
       ctx.globalCompositeOperation = 'source-over';
       return canvas.toDataURL('image/png');
-    }
-
-    async function createDraftCompositeDataUrl(handPayload, placementGuide) {
-      const base = await loadDrawable(handPayload.dataUrl);
-      const ringImg = await loadDrawable(ringCutout.src);
-      const canvas = document.createElement('canvas');
-      canvas.width = handPayload.width;
-      canvas.height = handPayload.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
-
-      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
-      const x = clampNumber(center.x, 0, 100) / 100 * canvas.width;
-      const y = clampNumber(center.y, 0, 100) / 100 * canvas.height;
-      const width = clampNumber(placementGuide.ringWidthImagePercent || 12, 3, 35) / 100 * canvas.width;
-      const height = width * (ringImg.naturalHeight / ringImg.naturalWidth) * clampNumber(placementGuide.perspectiveY || .86, .68, 1);
-
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate((placementGuide.rotationDeg || 0) * Math.PI / 180);
-      ctx.save();
-      ctx.translate(0, height * .2);
-      ctx.scale(1, .32);
-      const shadowGradient = ctx.createRadialGradient(0, 0, width * .08, 0, 0, width * .42);
-      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .34)');
-      shadowGradient.addColorStop(.58, 'rgba(48, 28, 20, .16)');
-      shadowGradient.addColorStop(1, 'rgba(48, 28, 20, 0)');
-      ctx.fillStyle = shadowGradient;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, width * .42, height * .5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      drawWrappedRingSprite(ctx, ringImg, width, height, placementGuide);
-      ctx.restore();
-
-      return canvas.toDataURL('image/png');
-    }
-
-    function getFingerSegmentMaskGeometry(width, height, placementGuide) {
-      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
-      const cx = clampNumber(center.x, 4, 96) / 100 * width;
-      const cy = clampNumber(center.y, 4, 96) / 100 * height;
-      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 10, 4, 18) / 100;
-      const fingerPercent = clampNumber(placementGuide.fingerWidthImagePercent || ringPercent * .72 * 100, 4, 22) / 100;
-      const fingerWidth = Math.max(44, width * fingerPercent);
-      const ringWidth = Math.max(fingerWidth * 1.05, width * ringPercent);
-      const segmentLength = Math.max(54, Math.min(110, Math.max(fingerWidth * 1.45, ringWidth * .72)));
-      const fingerAngle = ((placementGuide.rotationDeg || 0) - 90) * Math.PI / 180;
-      return {
-        x: cx,
-        y: cy,
-        width: Math.max(fingerWidth * 1.45, ringWidth * 1.22),
-        height: segmentLength,
-        radius: Math.min(fingerWidth * .72, segmentLength / 2),
-        angle: fingerAngle
-      };
-    }
-
-    function drawWrappedRingSprite(ctx, ringImg, width, height, placementGuide) {
-      const farSide = ((placementGuide.centerImagePercent?.x || 50) > 50) ? 'right' : 'left';
-      const squeeze = clampNumber(placementGuide.farSideSqueeze || .9, .84, .96);
-      const edgeAlpha = clampNumber(placementGuide.edgeOpacity || .88, .82, .94);
-      const halfSource = ringImg.naturalWidth / 2;
-      const halfWidth = width / 2;
-
-      ctx.save();
-      ctx.globalAlpha = edgeAlpha;
-      if (farSide === 'left') {
-        ctx.drawImage(ringImg, 0, 0, halfSource, ringImg.naturalHeight, -halfWidth * squeeze, -height / 2, halfWidth * squeeze, height);
-      } else {
-        ctx.drawImage(ringImg, halfSource, 0, halfSource, ringImg.naturalHeight, 0, -height / 2, halfWidth * squeeze, height);
-      }
-      ctx.restore();
-
-      ctx.save();
-      ctx.beginPath();
-      if (farSide === 'left') {
-        ctx.rect(-halfWidth * .05, -height / 2, halfWidth * 1.05, height);
-        ctx.clip();
-        ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
-      } else {
-        ctx.rect(-halfWidth, -height / 2, halfWidth * 1.05, height);
-        ctx.clip();
-        ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
-      }
-      ctx.restore();
-
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = .45;
-      const highlight = ctx.createLinearGradient(-width * .28, -height * .2, width * .28, -height * .4);
-      highlight.addColorStop(0, 'rgba(255,255,255,0)');
-      highlight.addColorStop(.48, 'rgba(255,255,255,.72)');
-      highlight.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.strokeStyle = highlight;
-      ctx.lineWidth = Math.max(1.4, width * .018);
-      ctx.beginPath();
-      ctx.ellipse(0, -height * .18, width * .33, height * .12, 0, Math.PI * .08, Math.PI * .92);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    function drawRoundedCapsule(ctx, geometry) {
-      const halfW = geometry.width / 2;
-      const halfH = geometry.height / 2;
-      const radius = Math.min(geometry.radius, halfW, halfH);
-      ctx.save();
-      ctx.translate(geometry.x, geometry.y);
-      ctx.rotate(geometry.angle);
-      ctx.beginPath();
-      ctx.moveTo(-halfW + radius, -halfH);
-      ctx.lineTo(halfW - radius, -halfH);
-      ctx.quadraticCurveTo(halfW, -halfH, halfW, -halfH + radius);
-      ctx.lineTo(halfW, halfH - radius);
-      ctx.quadraticCurveTo(halfW, halfH, halfW - radius, halfH);
-      ctx.lineTo(-halfW + radius, halfH);
-      ctx.quadraticCurveTo(-halfW, halfH, -halfW, halfH - radius);
-      ctx.lineTo(-halfW, -halfH + radius);
-      ctx.quadraticCurveTo(-halfW, -halfH, -halfW + radius, -halfH);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-
-    async function generateGptPlacementFit() {
-      const endpoint = getBackendEndpoint('/api/place-ring');
-      const variant = getSelectedVariant();
-      const handImage = await getHandPlacementImageDataUrl();
-      const ringImage = await getProductImageDataUrl(variant.productSrc);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          finger: fingerSelect.value,
-          handSide: handSelect.value,
-          ringName: variant.name,
-          ringPrice: variant.price,
-          ringDescription: variant.description,
-          handImage,
-          ringImage
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `TROOLLM placement failed (${response.status}).`);
-      }
-      if (!data.placement) throw new Error('TROOLLM did not return placement geometry.');
-      return convertGptPlacementToFit(data.placement);
     }
 
     function getBackendEndpoint(path) {
@@ -1210,19 +1020,6 @@
       return cleanedPath;
     }
 
-    async function getHandPlacementImageDataUrl() {
-      const img = getCurrentHandImage();
-      if (!img.complete || !img.naturalWidth) return '';
-      const maxSide = 768;
-      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', .86);
-    }
-
     async function getProductImageDataUrl(src) {
       const img = await loadDrawable(src);
       const canvas = document.createElement('canvas');
@@ -1231,21 +1028,6 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       return canvas.toDataURL('image/png');
-    }
-
-    function convertGptPlacementToFit(placement) {
-      const imageRect = getDisplayedImageRect(getCurrentHandImage());
-      const variant = getSelectedVariant();
-      const xImagePercent = clampNumber(placement.xImagePercent, 2, 98);
-      const yImagePercent = clampNumber(placement.yImagePercent, 2, 98);
-      const ringWidthImagePercent = clampNumber(placement.ringWidthImagePercent, 3, 35);
-      return {
-        xStagePercent: (imageRect.left + xImagePercent / 100 * imageRect.width) / imageRect.stageWidth * 100,
-        yStagePercent: (imageRect.top + yImagePercent / 100 * imageRect.height) / imageRect.stageHeight * 100,
-        widthPx: ringWidthImagePercent / 100 * imageRect.width * (variant.fitScale || 1),
-        rotationDeg: clampNumber(placement.rotationDeg || 0, -28, 28),
-        note: `TROOLLM placement (${Math.round((placement.confidence || 0) * 100)}% confidence).`
-      };
     }
 
     ring.addEventListener('pointerdown', event => {
@@ -1355,135 +1137,6 @@
         img.onerror = reject;
         img.src = src;
       });
-    }
-
-    async function generateLandmarkFit() {
-      const detector = await getHandLandmarker();
-      const result = detector.detect(getCurrentHandImage());
-      const landmarks = result.landmarks && result.landmarks[0];
-      if (!landmarks) throw new Error('No hand detected. Use a clearer top-view hand photo.');
-      return buildRingFitFromLandmarks(landmarks);
-    }
-
-    async function getHandLandmarker() {
-      if (getHandLandmarker.instance) return getHandLandmarker.instance;
-      setAiStatus('Loading hand landmark detector...');
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/vision_bundle.mjs');
-      const fileset = await vision.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm'
-      );
-      getHandLandmarker.instance = await vision.HandLandmarker.createFromOptions(fileset, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task',
-          delegate: 'GPU'
-        },
-        runningMode: 'IMAGE',
-        numHands: 1
-      });
-      return getHandLandmarker.instance;
-    }
-
-    function warmHandDetector() {
-      getHandLandmarker().catch(error => console.warn('Hand detector warmup failed', error));
-    }
-
-    function buildRingFitFromLandmarks(points) {
-      const fingerMap = {
-        thumb: [1, 2, 5],
-        'index finger': [5, 6, 9],
-        'middle finger': [9, 10, 13],
-        'ring finger': [13, 14, 17],
-        'little finger': [17, 18, 13]
-      };
-      const [mcpIndex, pipIndex, neighborIndex] = fingerMap[fingerSelect.value] || fingerMap['ring finger'];
-      const mcp = points[mcpIndex];
-      const pip = points[pipIndex];
-      const neighbor = points[neighborIndex];
-      if (!mcp || !pip || !neighbor) throw new Error('Selected finger was not detected clearly.');
-
-      const imageRect = getDisplayedImageRect(getCurrentHandImage());
-      const mcpPx = toImagePoint(mcp, imageRect);
-      const pipPx = toImagePoint(pip, imageRect);
-      const neighborPx = toImagePoint(neighbor, imageRect);
-      const t = fingerSelect.value === 'thumb' ? 0.5 : 0.18;
-      const centerPx = {
-        x: mcpPx.x + (pipPx.x - mcpPx.x) * t,
-        y: mcpPx.y + (pipPx.y - mcpPx.y) * t
-      };
-      const fingerLength = distance(mcpPx, pipPx);
-      const baseSpacing = distance(mcpPx, neighborPx);
-      const selected = getSelectedVariant();
-      const localFingerWidth = clampNumber(Math.max(fingerLength * 0.28, baseSpacing * 0.42), 24, 82);
-      const width = clampNumber(localFingerWidth * 1.08, 30, 104) * (selected.fitScale || 1);
-      const fingerAngle = Math.atan2(pipPx.y - mcpPx.y, pipPx.x - mcpPx.x) * 180 / Math.PI;
-      const rotation = normalizeAngle(fingerAngle + 90);
-      const depthTilt = clampNumber(1 - Math.abs(pip.z - mcp.z) * 1.4, .72, .96);
-
-      return {
-        xStagePercent: centerPx.x / imageRect.stageWidth * 100,
-        yStagePercent: centerPx.y / imageRect.stageHeight * 100,
-        xImagePercent: (centerPx.x - imageRect.left) / imageRect.width * 100,
-        yImagePercent: (centerPx.y - imageRect.top) / imageRect.height * 100,
-        widthImagePercent: width / imageRect.width * 100,
-        fingerWidthPx: localFingerWidth,
-        perspectiveY: depthTilt,
-        farSideSqueeze: .9,
-        edgeOpacity: .88,
-        widthPx: width,
-        rotationDeg: rotation,
-        note: 'Ring fitted to detected finger landmarks.'
-      };
-    }
-
-    function toImagePoint(point, imageRect) {
-      return {
-        x: imageRect.left + point.x * imageRect.width,
-        y: imageRect.top + point.y * imageRect.height
-      };
-    }
-
-    function distance(a, b) {
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    function normalizeAngle(angle) {
-      let value = angle;
-      while (value > 90) value -= 180;
-      while (value < -90) value += 180;
-      return clampNumber(value, -28, 28);
-    }
-
-    function clampNumber(value, min, max) {
-      return Math.min(max, Math.max(min, Number(value)));
-    }
-
-    function applyLandmarkFit(fit) {
-      const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value)));
-      const variant = getSelectedVariant();
-      ringState = {
-        x: clamp(fit.xStagePercent ?? defaultRing.x, 4, 96),
-        y: clamp((fit.yStagePercent ?? defaultRing.y) + (variant.yOffset || 0), 4, 96),
-        size: clamp(fit.widthPx ?? defaultRing.size, 20, 420),
-        rotation: clamp(fit.rotationDeg ?? 0, -28, 28)
-      };
-    }
-
-    function applyFallbackFit() {
-      const variant = getSelectedVariant();
-      const presets = {
-        thumb: { x: 79, y: 59, size: 82, rotation: -18 },
-        'index finger': { x: 37, y: 50, size: 78, rotation: -9 },
-        'middle finger': { x: 49, y: 47, size: 82, rotation: -2 },
-        'ring finger': { x: 44.6, y: 48.2, size: 76, rotation: 4 },
-        'little finger': { x: 66, y: 58, size: 70, rotation: 15 }
-      };
-      const preset = presets[fingerSelect.value] || presets['ring finger'];
-      ringState = {
-        x: preset.x,
-        y: clampNumber(preset.y + (variant.yOffset || 0), 4, 96),
-        size: clampNumber(preset.size * (variant.fitScale || 1), 20, 420),
-        rotation: preset.rotation
-      };
     }
 
     function getDisplayedImageRect(img) {
