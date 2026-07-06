@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>See How It Looks - Ring Try On</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #d64d67;
+      --brand-dark: #bd3f58;
+      --ink: #343236;
+      --muted: #787279;
+      --line: #ece8e8;
+      --soft: #fff6f7;
+      --panel: rgba(255,255,255,.88);
+      --shadow: 0 20px 50px rgba(154, 84, 98, .12);
+      font-family: Manrope, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 12%, rgba(214, 77, 103, .11), transparent 32%),
+        linear-gradient(180deg, #fff 0%, #fff8f8 100%);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .tool {
+      width: min(980px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: rgba(255,255,255,.94);
+      box-shadow: var(--shadow);
+      padding: clamp(18px, 3vw, 28px);
+    }
+
+    .head {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .kicker {
+      color: var(--brand);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .16em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 34px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .workspace {
+      display: grid;
+      gap: 14px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 380px;
+      aspect-ratio: 1.12 / 1;
+      border-radius: 20px;
+      overflow: hidden;
+      background: #faf8f7;
+      border: 1px solid var(--line);
+      touch-action: none;
+      user-select: none;
+    }
+
+    .reference,
+    .finger,
+    .camera {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .finger {
+      object-fit: contain;
+      background: #faf8f7;
+    }
+
+    .finger,
+    .camera,
+    .ai-result { display: none; }
+
+    .camera { background: #111; transform: scaleX(-1); }
+
+    .ai-result {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 3;
+    }
+
+    .ring {
+      position: absolute;
+      left: 50%;
+      top: 76%;
+      width: 110px;
+      aspect-ratio: 2 / 1;
+      transform: translate(-50%, -50%) rotate(-8deg);
+      transform-origin: center;
+      filter: saturate(1.08) contrast(1.04);
+      cursor: grab;
+      touch-action: none;
+      display: none;
+      z-index: 4;
+      overflow: visible;
+    }
+
+    .ring:active { cursor: grabbing; }
+
+    .ring::before {
+      content: "";
+      position: absolute;
+      left: 14%;
+      right: 14%;
+      top: 48%;
+      height: 38%;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(50, 30, 22, .34) 0%, rgba(50, 30, 22, .18) 42%, transparent 72%);
+      filter: blur(5px);
+      transform: translateY(7px) scaleX(.95);
+      opacity: .58;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .ring::after {
+      content: "";
+      position: absolute;
+      left: 28%;
+      top: 22%;
+      width: 46%;
+      height: 20%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.72), transparent);
+      filter: blur(2px);
+      opacity: .46;
+      transform: rotate(-5deg);
+      z-index: 3;
+      pointer-events: none;
+      mix-blend-mode: screen;
+    }
+
+    .ring-cutout {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform: none;
+      pointer-events: none;
+      user-select: none;
+      z-index: 2;
+      filter:
+        drop-shadow(0 1px 1px rgba(255,255,255,.7))
+        drop-shadow(0 4px 5px rgba(51, 30, 22, .24));
+    }
+
+    .hint-card {
+      position: absolute;
+      left: 9%;
+      bottom: 8%;
+      width: min(330px, 78%);
+      border-radius: 18px;
+      background: rgba(255,255,255,.82);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,.7);
+      padding: 18px 22px;
+      z-index: 3;
+    }
+
+    .hint-card b {
+      display: block;
+      font-size: 20px;
+      line-height: 1.12;
+      margin-bottom: 12px;
+    }
+
+    .hint-card span {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .tools {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .note {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      background: #fcfbfb;
+    }
+
+    .note b {
+      display: block;
+      font-size: 17px;
+      margin-bottom: 6px;
+    }
+
+    .note span {
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .upload {
+      grid-column: 1 / -1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #downloadBtn { grid-column: 1 / -1; }
+
+    button,
+    .upload {
+      min-height: 56px;
+      border-radius: 14px;
+      border: 2px solid var(--brand);
+      background: #fff;
+      color: var(--brand);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+
+    button:hover,
+    .upload:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(214,77,103,.13);
+    }
+
+    .primary {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+
+    .upload input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .sliders {
+      display: grid;
+      gap: 16px;
+      padding-top: 2px;
+    }
+
+    label.control {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #aaa3a8;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .ai-panel {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .ai-field {
+      display: grid;
+      gap: 7px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #aaa3a8;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .ai-field.full { grid-column: 1 / -1; }
+
+    .ai-field input,
+    .ai-field select {
+      width: 100%;
+      min-height: 44px;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .ai-status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .variant-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .variant-card {
+      min-height: auto;
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 6px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 11px;
+      line-height: 1.15;
+      text-align: center;
+    }
+
+    .variant-card img {
+      width: 54px;
+      height: 54px;
+      object-fit: contain;
+      border-radius: 10px;
+      background: #f6f4f1;
+    }
+
+    .variant-card.active {
+      border-color: var(--brand);
+      color: var(--brand);
+      box-shadow: 0 10px 22px rgba(214,77,103,.12);
+    }
+
+    .variant-card:focus-visible {
+      outline: 3px solid rgba(214,77,103,.28);
+      outline-offset: 2px;
+    }
+
+    .manual-tools[hidden] { display: none; }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand);
+    }
+
+    .capture {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 5;
+      display: none;
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 999px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .powered {
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%) translateY(18px);
+      opacity: 0;
+      pointer-events: none;
+      background: #302a2d;
+      color: #fff;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 20;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (min-width: 760px) {
+      .workspace { grid-template-columns: minmax(0, 1.1fr) minmax(310px, .9fr); }
+      .stage { min-height: 450px; }
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 12px; }
+      .tool { border-radius: 20px; padding: 14px; }
+      .head { gap: 10px; flex-wrap: wrap; }
+      .workspace { padding: 10px; }
+      .stage {
+        width: 100%;
+        min-height: 0;
+        height: clamp(300px, 84vw, 340px);
+        aspect-ratio: auto;
+        border-radius: 16px;
+      }
+      .actions { grid-template-columns: 1fr; }
+      .ai-grid { grid-template-columns: 1fr; }
+      .variant-list { gap: 6px; }
+      .variant-card { padding: 7px 4px; font-size: 10px; }
+      .variant-card img { width: 46px; height: 46px; }
+      .hint-card { left: 7%; bottom: 7%; padding: 15px; }
+      .hint-card b { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="tool" aria-labelledby="title">
+    <div class="head">
+      <span class="kicker">TRY</span>
+      <h1 id="title">See How It Looks</h1>
+    </div>
+
+    <section class="workspace" aria-label="Ring try on tool">
+      <div class="stage" id="stage">
+        <img class="reference" id="reference" src="assets/demo/reference-look.png" alt="Real hand reference wearing a ring">
+        <img class="finger" id="finger" alt="Uploaded finger preview">
+        <img class="ai-result" id="aiResult" alt="Fitted ring preview">
+        <video class="camera" id="camera" autoplay muted playsinline></video>
+        <button class="capture primary" id="capture" type="button">Capture Photo</button>
+        <div class="ring" id="ring" aria-label="Worn ring cutout" role="img">
+          <img class="ring-cutout" id="ringCutout" src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/ring-marked-clean.png" alt="">
+        </div>
+        <div class="hint-card" id="hint" style="display: none;">
+          <b>Real hand reference</b>
+          <span>Upload a hand image, choose a product and finger, then generate the final try-on output.</span>
+        </div>
+      </div>
+
+      <aside class="tools">
+        <div class="note">
+          <b>Mistral generated output</b>
+          <span>The hand is parsed for placement metrics, then Mistral generates the final try-on image with the ring seated on the target finger.</span>
+        </div>
+
+        <div class="ai-panel">
+          <div class="ai-field full">
+            Choose ring
+            <div class="variant-list" id="variantList">
+              <button type="button" class="variant-card active" data-variant="gleam">
+                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png" alt="">
+                <span>Gleam V</span>
+              </button>
+              <button type="button" class="variant-card" data-variant="solitaire">
+                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png" alt="">
+                <span>Solitaire</span>
+              </button>
+              <button type="button" class="variant-card" data-variant="lattice">
+                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png" alt="">
+                <span>Lattice</span>
+              </button>
+            </div>
+          </div>
+          <div class="ai-grid">
+            <label class="ai-field">
+              Place on
+              <select id="fingerSelect">
+                <option value="ring finger">Ring finger</option>
+                <option value="index finger">Index finger</option>
+                <option value="middle finger">Middle finger</option>
+                <option value="little finger">Little finger</option>
+                <option value="thumb">Thumb</option>
+              </select>
+            </label>
+            <label class="ai-field">
+              Hand side
+              <select id="handSelect">
+                <option value="auto-detect">Auto-detect</option>
+                <option value="left hand">Left hand</option>
+                <option value="right hand">Right hand</option>
+              </select>
+            </label>
+          </div>
+          <button type="button" id="aiGenerateBtn" class="primary">Generate Output</button>
+          <div class="ai-status" id="aiStatus">Upload a hand image, choose the product and finger, then generate the final output.</div>
+        </div>
+
+        <div class="actions">
+          <label class="upload primary" for="fileInput">
+            Upload Finger
+            <input id="fileInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp">
+          </label>
+          <button type="button" id="cameraBtn">Camera</button>
+          <button type="button" id="resetBtn">Reset</button>
+          <button type="button" id="downloadBtn" class="primary">Download Preview</button>
+        </div>
+
+      </aside>
+    </section>
+
+    <div class="footer">
+      <span>Geometry metrics guide Mistral so the ring sits naturally on the selected finger.</span>
+      <span class="powered">Powered by Troopod</span>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const reference = document.getElementById('reference');
+    const finger = document.getElementById('finger');
+    const aiResult = document.getElementById('aiResult');
+    const ring = document.getElementById('ring');
+    const ringCutout = document.getElementById('ringCutout');
+    const hint = document.getElementById('hint');
+    const fileInput = document.getElementById('fileInput');
+    const fingerSelect = document.getElementById('fingerSelect');
+    const handSelect = document.getElementById('handSelect');
+    const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+    const aiStatus = document.getElementById('aiStatus');
+    const scaleInput = null;
+    const camera = document.getElementById('camera');
+    const capture = document.getElementById('capture');
+    const toast = document.getElementById('toast');
+    const variantList = document.getElementById('variantList');
+    const isStaticHostedPage = /\.github\.io$/i.test(location.hostname);
+    const ringVariants = {
+      gleam: {
+        name: 'Gleam V',
+        description: 'a delicate V-shaped chevron ring with a gold upper band, bright white lower band, and small diamond-like stones',
+        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png',
+        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png',
+        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/ring-marked-clean.png',
+        fitScale: 0.74,
+        yOffset: 0
+      },
+      solitaire: {
+        name: 'Solitaire',
+        description: 'a slim solitaire ring with a small raised stone on a polished band',
+        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
+        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
+        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
+        fitScale: 0.78,
+        yOffset: 0
+      },
+      lattice: {
+        name: 'Lattice',
+        description: 'a polished lattice-style band with small sparkling stones across the front',
+        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
+        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
+        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
+        fitScale: 0.76,
+        yOffset: 0
+      }
+    };
+
+    let stream = null;
+    let activeImageSrc = '';
+    let activeMimeType = 'image/png';
+    let aiResultSrc = '';
+    let selectedVariantKey = 'gleam';
+    const defaultRing = { x: 50, y: 48, size: 64, rotation: 4 };
+    let ringState = { ...defaultRing };
+    let drag = null;
+
+    function getSelectedVariant() {
+      return ringVariants[selectedVariantKey] || ringVariants.gleam;
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function setAiStatus(message) {
+      aiStatus.textContent = message;
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      camera.pause();
+      camera.srcObject = null;
+      camera.style.display = 'none';
+      capture.style.display = 'none';
+    }
+
+    function getCurrentHandImage() {
+      return activeImageSrc ? finger : reference;
+    }
+
+    function showCurrentHandImage() {
+      const usingUpload = Boolean(activeImageSrc);
+      reference.style.display = usingUpload ? 'none' : 'block';
+      finger.style.display = usingUpload ? 'block' : 'none';
+      aiResult.style.display = 'none';
+      hint.style.display = 'none';
+    }
+
+    function applyRing() {
+      ring.style.left = ringState.x + '%';
+      ring.style.top = ringState.y + '%';
+      ring.style.width = ringState.size + 'px';
+      ring.style.transform = `translate(-50%, -50%) rotate(${ringState.rotation || 0}deg)`;
+      if (scaleInput) scaleInput.value = ringState.size;
+    }
+
+    function showRing() {
+      ring.style.display = 'block';
+      hint.style.display = 'none';
+      applyRing();
+    }
+
+    function loadFinger(src) {
+      stopCamera();
+      activeImageSrc = src;
+      aiResultSrc = '';
+      aiResult.removeAttribute('src');
+      aiResult.style.display = 'none';
+      finger.onload = () => {
+        reference.style.display = 'none';
+        finger.style.display = 'block';
+        ringState = { ...defaultRing };
+        ring.style.display = 'none';
+        hint.style.display = 'none';
+        stage.dataset.fitTap = '0';
+        setAiStatus(`Choose the finger, then tap Generate Output for ${getSelectedVariant().name}.`);
+        showToast('Photo ready. Choose the ring and finger.');
+      };
+      finger.onerror = () => {
+        showToast('This image could not be loaded. Try JPG or PNG.');
+        resetTool();
+      };
+      finger.src = src;
+    }
+
+    function resetTool() {
+      stopCamera();
+      fileInput.value = '';
+      activeImageSrc = '';
+      aiResultSrc = '';
+      finger.removeAttribute('src');
+      finger.style.display = 'none';
+      aiResult.removeAttribute('src');
+      aiResult.style.display = 'none';
+      reference.style.display = 'block';
+      ring.style.display = 'none';
+      hint.style.display = 'none';
+      stage.dataset.fitTap = '0';
+      ringState = { ...defaultRing };
+      applyRing();
+      setAiStatus('Upload a hand image, choose the product and finger, then generate the final output.');
+    }
+
+    variantList.addEventListener('click', event => {
+      const card = event.target.closest('[data-variant]');
+      if (!card || !ringVariants[card.dataset.variant]) return;
+      selectedVariantKey = card.dataset.variant;
+      variantList.querySelectorAll('.variant-card').forEach(button => {
+        button.classList.toggle('active', button === card);
+      });
+      const variant = getSelectedVariant();
+      ringCutout.src = variant.overlaySrc;
+      aiResultSrc = '';
+      aiResult.removeAttribute('src');
+      aiResult.style.display = 'none';
+      if (activeImageSrc) {
+        finger.style.display = 'block';
+        ring.style.display = 'none';
+        setAiStatus(`Selected ${variant.name}. Choose the finger, then tap Generate Output.`);
+      } else {
+        reference.style.display = 'block';
+        setAiStatus(`Selected ${variant.name}. Upload a hand image, then tap Generate Output.`);
+      }
+    });
+
+    fileInput.addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (file.type && !file.type.startsWith('image/')) {
+        showToast('Please upload an image file.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => loadFinger(reader.result);
+      reader.onerror = () => showToast('Could not read this image.');
+      activeMimeType = file.type || 'image/png';
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('cameraBtn').addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Camera is not available in this browser.');
+        return;
+      }
+      try {
+        reference.style.display = 'none';
+        finger.style.display = 'none';
+        ring.style.display = 'none';
+        hint.style.display = 'none';
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        camera.srcObject = stream;
+        camera.style.display = 'block';
+        capture.style.display = 'inline-flex';
+        await camera.play();
+        showToast('Camera ready. Tap capture.');
+      } catch (error) {
+        resetTool();
+        showToast('Camera permission is needed.');
+      }
+    });
+
+    capture.addEventListener('click', () => {
+      if (!camera.videoWidth) {
+        showToast('Camera is still loading.');
+        return;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = camera.videoWidth;
+      canvas.height = camera.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
+      activeMimeType = 'image/jpeg';
+      loadFinger(canvas.toDataURL('image/jpeg', .92));
+    });
+
+    aiGenerateBtn.addEventListener('click', async () => {
+      aiGenerateBtn.disabled = true;
+      aiGenerateBtn.textContent = 'Generating...';
+      stopCamera();
+      if (!activeImageSrc) {
+        setAiStatus('Upload a hand image first so Mistral can generate the final try-on from that hand.');
+        showToast('Upload a hand image first.');
+        aiGenerateBtn.disabled = false;
+        aiGenerateBtn.textContent = 'Generate Output';
+        return;
+      }
+      ring.style.display = 'none';
+      showCurrentHandImage();
+      setAiStatus('Parsing hand geometry, then asking Mistral to generate the final output.');
+
+      try {
+        const generated = await generateRingImage();
+        aiResultSrc = generated;
+        aiResult.onload = () => {
+          reference.style.display = 'none';
+          finger.style.display = 'none';
+          ring.style.display = 'none';
+          aiResult.style.display = 'block';
+          hint.style.display = 'none';
+          setAiStatus('Mistral output ready. Download Preview saves this result.');
+          showToast('Output generated.');
+        };
+        aiResult.src = generated;
+      } catch (error) {
+        console.error(error);
+        showCurrentHandImage();
+        setAiStatus(error.message || 'Could not generate the final output.');
+        showToast(error.message || 'Generation failed.');
+      } finally {
+        aiGenerateBtn.disabled = false;
+        aiGenerateBtn.textContent = 'Generate Output';
+      }
+    });
+
+    async function generateRingImage() {
+      if (isStaticHostedPage && !window.TROOPOD_BACKEND_URL) {
+        throw new Error('Backend URL is not configured for this hosted page.');
+      }
+      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
+      const variant = getSelectedVariant();
+      const handImage = await getHandImageDataUrl();
+      const placementGuide = await getPlacementGuide();
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          finger: fingerSelect.value,
+          handSide: handSelect.value,
+          ringName: variant.name,
+          ringDescription: variant.description,
+          handImage,
+          placementGuide
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `Image backend failed (${response.status}).`);
+      }
+      if (!data.image) throw new Error('Image backend did not return a generated image.');
+      return data.image;
+    }
+
+    async function getHandImageDataUrl() {
+      const img = getCurrentHandImage();
+      if (!img.complete || !img.naturalWidth) return '';
+      const maxSide = 1024;
+      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', .86);
+    }
+
+    async function getPlacementGuide() {
+      try {
+        const fit = await generateLandmarkFit();
+        return {
+          available: true,
+          targetFinger: fingerSelect.value,
+          centerStagePercent: {
+            x: Number(fit.xStagePercent.toFixed(2)),
+            y: Number(fit.yStagePercent.toFixed(2))
+          },
+          ringWidthPx: Math.round(fit.widthPx),
+          rotationDeg: Number(fit.rotationDeg.toFixed(1)),
+          instruction: 'Place the ring centered at these coordinates on the selected finger base. Match this rotation and scale. The ring must wrap naturally around the finger with occlusion and contact shadows.'
+        };
+      } catch {
+        return {
+          available: false,
+          targetFinger: fingerSelect.value,
+          instruction: 'No reliable landmarks were detected. Use visual reasoning to place the ring at the base of the selected finger, below the first knuckle, with natural wrap, occlusion, and contact shadow.'
+        };
+      }
+    }
+
+    ring.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      ring.setPointerCapture(event.pointerId);
+      const rect = stage.getBoundingClientRect();
+      drag = {
+        dx: event.clientX - (rect.left + rect.width * ringState.x / 100),
+        dy: event.clientY - (rect.top + rect.height * ringState.y / 100)
+      };
+    });
+
+    ring.addEventListener('pointermove', event => {
+      if (!drag) return;
+      const rect = stage.getBoundingClientRect();
+      ringState.x = ((event.clientX - drag.dx - rect.left) / rect.width) * 100;
+      ringState.y = ((event.clientY - drag.dy - rect.top) / rect.height) * 100;
+      applyRing();
+    });
+
+    ring.addEventListener('pointerup', () => { drag = null; });
+    ring.addEventListener('pointercancel', () => { drag = null; });
+
+    document.addEventListener('pointerdown', event => {
+      if (stage.dataset.fitTap !== '1') return;
+      const rect = stage.getBoundingClientRect();
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      ) return;
+      event.preventDefault();
+      const x = (event.clientX - rect.left) / rect.width * 100;
+      const y = (event.clientY - rect.top) / rect.height * 100;
+      const variant = getSelectedVariant();
+      const size = Math.min(92, Math.max(54, rect.width * 0.22)) * (variant.fitScale || 1);
+      ringState = {
+        x: Math.min(96, Math.max(4, x)),
+        y: Math.min(96, Math.max(4, y)),
+        size,
+        rotation: 0
+      };
+      stage.dataset.fitTap = '0';
+      showCurrentHandImage();
+      showRing();
+      setAiStatus('Ring placed at the tapped finger base. Use scale or arrows for final micro-adjustment.');
+      showToast('Ring placed.');
+    }, true);
+
+    document.getElementById('resetBtn').addEventListener('click', resetTool);
+
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      if (aiResultSrc) {
+        const link = document.createElement('a');
+        link.download = 'ai-ring-try-on-preview.png';
+        link.href = aiResultSrc;
+        link.click();
+        showToast('Preview downloaded.');
+        return;
+      }
+      const baseSrc = activeImageSrc || reference.src;
+      const base = await loadDrawable(baseSrc);
+      const ringImg = await loadDrawable(ringCutout.src);
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+      drawCover(ctx, base, canvas.width, canvas.height);
+      const stageRect = stage.getBoundingClientRect();
+      const normalizedSize = ringState.size / stageRect.width;
+      const size = normalizedSize * canvas.width;
+      const x = ringState.x / 100 * canvas.width;
+      const y = ringState.y / 100 * canvas.height;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((ringState.rotation || 0) * Math.PI / 180);
+      const ringHeight = size * (ringImg.naturalHeight / ringImg.naturalWidth);
+      ctx.save();
+      ctx.translate(0, ringHeight * .23);
+      ctx.scale(1, .34);
+      const shadowGradient = ctx.createRadialGradient(0, 0, size * .08, 0, 0, size * .42);
+      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .32)');
+      shadowGradient.addColorStop(.55, 'rgba(48, 28, 20, .16)');
+      shadowGradient.addColorStop(1, 'rgba(48, 28, 20, 0)');
+      ctx.fillStyle = shadowGradient;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * .45, ringHeight * .58, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.drawImage(ringImg, -size / 2, -ringHeight / 2, size, ringHeight);
+      ctx.restore();
+      const link = document.createElement('a');
+      link.download = 'ring-try-on-preview.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('Preview downloaded.');
+    });
+
+    function loadDrawable(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        if (!(location.protocol === 'file:' && !/^https?:|^data:/.test(src))) {
+          img.crossOrigin = 'anonymous';
+        }
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    async function generateLandmarkFit() {
+      const detector = await getHandLandmarker();
+      const result = detector.detect(getCurrentHandImage());
+      const landmarks = result.landmarks && result.landmarks[0];
+      if (!landmarks) throw new Error('No hand detected. Use a clearer top-view hand photo.');
+      return buildRingFitFromLandmarks(landmarks);
+    }
+
+    async function getHandLandmarker() {
+      if (getHandLandmarker.instance) return getHandLandmarker.instance;
+      setAiStatus('Loading hand landmark detector...');
+      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/vision_bundle.mjs');
+      const fileset = await vision.FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm'
+      );
+      getHandLandmarker.instance = await vision.HandLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task',
+          delegate: 'GPU'
+        },
+        runningMode: 'IMAGE',
+        numHands: 1
+      });
+      return getHandLandmarker.instance;
+    }
+
+    function buildRingFitFromLandmarks(points) {
+      const fingerMap = {
+        thumb: [1, 2, 5],
+        'index finger': [5, 6, 9],
+        'middle finger': [9, 10, 13],
+        'ring finger': [13, 14, 17],
+        'little finger': [17, 18, 13]
+      };
+      const [mcpIndex, pipIndex, neighborIndex] = fingerMap[fingerSelect.value] || fingerMap['ring finger'];
+      const mcp = points[mcpIndex];
+      const pip = points[pipIndex];
+      const neighbor = points[neighborIndex];
+      if (!mcp || !pip || !neighbor) throw new Error('Selected finger was not detected clearly.');
+
+      const imageRect = getDisplayedImageRect(getCurrentHandImage());
+      const mcpPx = toImagePoint(mcp, imageRect);
+      const pipPx = toImagePoint(pip, imageRect);
+      const neighborPx = toImagePoint(neighbor, imageRect);
+      const t = fingerSelect.value === 'thumb' ? 0.58 : 0.3;
+      const centerPx = {
+        x: mcpPx.x + (pipPx.x - mcpPx.x) * t,
+        y: mcpPx.y + (pipPx.y - mcpPx.y) * t
+      };
+      const fingerLength = distance(mcpPx, pipPx);
+      const baseSpacing = distance(mcpPx, neighborPx);
+      const selected = getSelectedVariant();
+      const width = clampNumber(Math.max(fingerLength * 0.58, baseSpacing * 0.58), 34, 92) * (selected.fitScale || 1);
+      const fingerAngle = Math.atan2(pipPx.y - mcpPx.y, pipPx.x - mcpPx.x) * 180 / Math.PI;
+      const rotation = normalizeAngle(fingerAngle + 90);
+
+      return {
+        xStagePercent: centerPx.x / imageRect.stageWidth * 100,
+        yStagePercent: centerPx.y / imageRect.stageHeight * 100,
+        widthPx: width,
+        rotationDeg: rotation,
+        note: 'Ring fitted to detected finger landmarks.'
+      };
+    }
+
+    function toImagePoint(point, imageRect) {
+      return {
+        x: imageRect.left + point.x * imageRect.width,
+        y: imageRect.top + point.y * imageRect.height
+      };
+    }
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function normalizeAngle(angle) {
+      let value = angle;
+      while (value > 90) value -= 180;
+      while (value < -90) value += 180;
+      return clampNumber(value, -28, 28);
+    }
+
+    function clampNumber(value, min, max) {
+      return Math.min(max, Math.max(min, Number(value)));
+    }
+
+    function applyLandmarkFit(fit) {
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value)));
+      const variant = getSelectedVariant();
+      ringState = {
+        x: clamp(fit.xStagePercent ?? defaultRing.x, 4, 96),
+        y: clamp((fit.yStagePercent ?? defaultRing.y) + (variant.yOffset || 0), 4, 96),
+        size: clamp(fit.widthPx ?? defaultRing.size, 20, 420),
+        rotation: clamp(fit.rotationDeg ?? 0, -28, 28)
+      };
+    }
+
+    function applyFallbackFit() {
+      const variant = getSelectedVariant();
+      const presets = {
+        thumb: { x: 79, y: 59, size: 82, rotation: -18 },
+        'index finger': { x: 37, y: 50, size: 78, rotation: -9 },
+        'middle finger': { x: 49, y: 47, size: 82, rotation: -2 },
+        'ring finger': { x: 44.6, y: 48.2, size: 76, rotation: 4 },
+        'little finger': { x: 66, y: 58, size: 70, rotation: 15 }
+      };
+      const preset = presets[fingerSelect.value] || presets['ring finger'];
+      ringState = {
+        x: preset.x,
+        y: clampNumber(preset.y + (variant.yOffset || 0), 4, 96),
+        size: clampNumber(preset.size * (variant.fitScale || 1), 20, 420),
+        rotation: preset.rotation
+      };
+    }
+
+    function getDisplayedImageRect(img) {
+      const stageRect = stage.getBoundingClientRect();
+      const naturalWidth = img.naturalWidth || stageRect.width;
+      const naturalHeight = img.naturalHeight || stageRect.height;
+      const ratio = Math.min(stageRect.width / naturalWidth, stageRect.height / naturalHeight);
+      const width = naturalWidth * ratio;
+      const height = naturalHeight * ratio;
+      return {
+        left: (stageRect.width - width) / 2,
+        top: (stageRect.height - height) / 2,
+        width,
+        height,
+        stageWidth: stageRect.width,
+        stageHeight: stageRect.height
+      };
+    }
+
+    function drawCover(ctx, img, width, height) {
+      const ratio = Math.max(width / img.naturalWidth, height / img.naturalHeight);
+      const drawWidth = img.naturalWidth * ratio;
+      const drawHeight = img.naturalHeight * ratio;
+      ctx.drawImage(img, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    }
+
+    function drawContain(ctx, img, x, y, width, height) {
+      const ratio = Math.min(width / img.naturalWidth, height / img.naturalHeight);
+      const drawWidth = img.naturalWidth * ratio;
+      const drawHeight = img.naturalHeight * ratio;
+      ctx.drawImage(img, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+    }
+
+    applyRing();
+  </script>
+</body>
+</html>
