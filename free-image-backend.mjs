@@ -84,23 +84,21 @@ function buildTryOnPrompt(payload) {
     ? 'Use the uploaded hand pose and camera angle.'
     : `Use the uploaded ${handSide} pose and camera angle.`;
   const placementGuide = payload.placementGuide
-    ? `Deterministic geometry guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Follow this placement guide closely when positioning the ring.`
+    ? `Finger placement guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Use this only to identify the correct finger base and approximate scale. You may adjust the ring within the transparent mask so it sits naturally.`
     : 'Infer the selected finger base visually from the uploaded hand image.';
-  const draftInstruction = payload.draftImage
-    ? 'The first image already contains a rough 2D overlay of the selected ring at the intended scale, rotation, and position. Do not move, resize, redesign, or replace that ring. Blend and photorealistically finish this ring composite only: refine shadows, highlights, reflections, and finger occlusion.'
-    : 'Use the product reference image to add the ring at the guided placement.';
 
   return [
     'Use the OpenAI Images edit behavior: edit the uploaded hand image only within the transparent mask area.',
     'Outside the mask, keep the user hand photo pixel-identical as much as possible. Do not regenerate skin tone, lighting, background, nails, wrist, hand pose, or unmasked fingers.',
     'Use the selected catalog ring image as the exact visual reference. Do not imagine a generic ring.',
     `Add this exact ring design (${ringDescription}) onto the ${finger}, matching the reference ring's real proportions, band width, stone or setting type, metal color, stone placement, and style.`,
-    draftInstruction,
+    'Generate the ring placement yourself inside the transparent finger-base edit area. The ring should wrap around the finger and sit just above the knuckle bulge at the base of the selected finger.',
     handPose,
     placementGuide,
+    'Choose the exact final size, rotation, and occlusion needed for the ring to be physically worn on the finger. Match finger curvature, perspective, and camera angle.',
     'Blend this ring naturally onto the finger. Add a soft contact shadow directly beneath the band where it meets the skin, add a subtle specular highlight on the top curve of the band matching the photo light direction, and slightly darken the underside of the band.',
-    'Do not move, resize, rotate, redesign, or replace the ring from the rough overlay. Only refine shading, shadow, reflection, and tiny occlusion details.',
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
+    'Keep the selected ring design faithful to the product reference: preserve the recognizable silhouette, metal color, stones, setting, and style.',
     'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
@@ -124,7 +122,7 @@ async function callOpenAIImageGeneration(payload) {
   }
 
   const prompt = buildTryOnPrompt(payload);
-  const sourceImage = imageFromDataUrl(payload.draftImage || payload.handImage, payload.draftImage ? 'draft-ring-overlay' : 'hand');
+  const sourceImage = imageFromDataUrl(payload.handImage, 'hand');
   if (!sourceImage) {
     throw new Error('Upload a hand image before generating the try-on output.');
   }

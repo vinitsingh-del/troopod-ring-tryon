@@ -974,7 +974,6 @@
       const ringImage = await getProductImageDataUrl(variant.productSrc);
       const placementGuide = createPlacementGuideFromFit(fit, handPayload);
       const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
-      const draftImage = await createDraftCompositeDataUrl(handPayload, placementGuide);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -987,7 +986,6 @@
           handImage: handPayload.dataUrl,
           ringImage,
           maskImage,
-          draftImage,
           placementGuide
         })
       });
@@ -1034,7 +1032,7 @@
         edgeOpacity: Number((fit.edgeOpacity || .88).toFixed(2)),
         outputSize: { width: handPayload.width, height: handPayload.height },
         rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
-        instruction: 'Blend and photorealistically finish the rough ring overlay within the transparent finger-segment mask. Do not move or resize the ring. Preserve everything outside the mask.'
+        instruction: 'Use GPT Image edit to generate the selected product ring directly on this finger base inside the transparent mask. Preserve everything outside the mask.'
       };
     }
 
@@ -1096,15 +1094,15 @@
       const cy = clampNumber(center.y, 4, 96) / 100 * height;
       const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
       const fingerPercent = clampNumber(placementGuide.fingerWidthImagePercent || ringPercent * .72 * 100, 4, 22) / 100;
-      const fingerWidth = Math.max(42, width * fingerPercent);
-      const segmentLength = Math.max(fingerWidth * 2.15, 88);
+      const fingerWidth = Math.max(44, width * fingerPercent);
+      const segmentLength = Math.max(fingerWidth * 2.75, 118);
       const fingerAngle = ((placementGuide.rotationDeg || 0) - 90) * Math.PI / 180;
       return {
         x: cx,
         y: cy,
-        width: fingerWidth * 1.38,
+        width: fingerWidth * 2.05,
         height: segmentLength,
-        radius: fingerWidth * .69,
+        radius: fingerWidth,
         angle: fingerAngle
       };
     }
