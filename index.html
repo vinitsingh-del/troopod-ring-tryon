@@ -225,7 +225,7 @@
     .note b {
       display: block;
       font-size: 14px;
-      margin-bottom: 4px;
+      margin-bottom: 0;
     }
 
     .note span {
@@ -513,7 +513,6 @@
       <aside class="tools">
         <div class="note">
           <b>TROOLLM Image try-on</b>
-          <span>TROOLLM Image uses the uploaded hand, selected product, finger choice, and guard mask to generate the final worn-ring photo.</span>
         </div>
 
         <div class="ai-panel">
@@ -706,6 +705,7 @@
         stage.dataset.fitTap = '0';
         setAiStatus(`Choose the finger, then tap Fit Product for ${getSelectedVariant().name}.`);
         showToast('Photo ready. Choose the ring and finger.');
+        warmHandDetector();
       };
       finger.onerror = () => {
         showToast('This image could not be loaded. Try JPG or PNG.');
@@ -1381,6 +1381,10 @@
         numHands: 1
       });
       return getHandLandmarker.instance;
+    }
+
+    function warmHandDetector() {
+      getHandLandmarker().catch(error => console.warn('Hand detector warmup failed', error));
     }
 
     function buildRingFitFromLandmarks(points) {
