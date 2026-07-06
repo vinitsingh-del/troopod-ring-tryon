@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process';
 
 const beforePath = 'test/fixtures/reference-pair/before.png';
 const afterPath = 'test/fixtures/reference-pair/after.png';
-const approvedPath = 'assets/approved/gleam-ring-finger-visual-fit.png';
 const html = readFileSync('index.html', 'utf8');
 const backend = readFileSync('free-image-backend.mjs', 'utf8');
 
@@ -21,7 +20,6 @@ function assert(condition, message) {
 
 assert(existsSync(beforePath), 'Missing reference before image.');
 assert(existsSync(afterPath), 'Missing reference after image.');
-assert(existsSync(approvedPath), 'Missing approved visual fit image.');
 assert(html.includes('createSimpleRingMaskDataUrl'), 'Frontend must create the simple GPT edit mask.');
 assert(html.includes('const maskImage = createSimpleRingMaskDataUrl'), 'Frontend must use the simple mask for GPT generation.');
 assert(!html.includes('generateLandmarkFit'), 'Frontend should not use hand landmark logic.');
@@ -41,8 +39,8 @@ assert(backend.includes('No full image regeneration'), 'Backend prompt must prev
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
 assert(html.includes("'ring finger': { x: 45.5, y: 40.5, w: 13, h: 8.6"), 'Ring-finger mask should use the visually tested snug placement zone.');
 assert(backend.includes('slim worn chevron band'), 'Backend prompt should keep the ring small and neatly worn.');
-assert(backend.includes('approvedTryOnImage'), 'Backend should return the approved visual-fit result for the matching case.');
-assert(backend.includes('approved-visual-fit'), 'Approved visual-fit response should be identifiable.');
+assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
+assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');
 
 const before = dimensions(beforePath);
 const after = dimensions(afterPath);

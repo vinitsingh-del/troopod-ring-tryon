@@ -10,7 +10,6 @@ const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
-const APPROVED_GLEAM_RING_FINGER = resolve(WORKSPACE, 'assets/approved/gleam-ring-finger-visual-fit.png');
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -139,9 +138,6 @@ function imageFromDataUrl(dataUrl, fallbackName = 'image') {
 }
 
 async function callOpenAIImageGeneration(payload) {
-  const approvedImage = approvedTryOnImage(payload);
-  if (approvedImage) return approvedImage;
-
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API key is not configured. Set OPENAI_API_KEY in .env.local or the backend host environment.');
@@ -189,20 +185,6 @@ async function callOpenAIImageGeneration(payload) {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function approvedTryOnImage(payload) {
-  const ringName = String(payload.ringName || '').toLowerCase();
-  const ringDescription = String(payload.ringDescription || '').toLowerCase();
-  const finger = String(payload.finger || '').toLowerCase();
-  const isGleam = ringName.includes('gleam') || ringDescription.includes('chevron') || ringDescription.includes('v-shaped');
-  if (!isGleam || finger !== 'ring finger' || !existsSync(APPROVED_GLEAM_RING_FINGER)) return null;
-  const imageBase64 = readFileSync(APPROVED_GLEAM_RING_FINGER).toString('base64');
-  return {
-    image: `data:image/png;base64,${imageBase64}`,
-    model: 'approved-visual-fit',
-    provider: 'approved-visual-fit'
-  };
 }
 
 async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, signal }) {
