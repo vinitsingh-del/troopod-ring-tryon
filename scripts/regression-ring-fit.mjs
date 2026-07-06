@@ -30,7 +30,7 @@ assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve back
 assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
 assert(!html.includes('TROOLLM Image uses the uploaded hand'), 'Frontend should not show the removed explanatory note.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
-assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high'"), 'Image quality should default to high for better product fidelity.');
+assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium'"), 'Image quality should default to medium for faster fitting.');
 assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images edit must use the original hand as the base image.');
 assert(backend.includes('You are performing a realistic jewelry virtual try-on edit.'), 'Backend must use the clean GPT-only prompt.');
 assert(backend.includes('Mask: only the small ring-placement zone'), 'Backend prompt must describe the edit mask.');
@@ -38,6 +38,8 @@ assert(backend.includes('Do not redesign the ring'), 'Backend prompt must protec
 assert(backend.includes('No full image regeneration'), 'Backend prompt must prevent full-image regeneration.');
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
 assert(html.includes("'ring finger': { x: 45.5, y: 40.5, w: 13, h: 8.6"), 'Ring-finger mask should use the visually tested snug placement zone.');
+assert(html.includes('const maxSide = 832'), 'Hand upload should be resized for faster fitting.');
+assert(html.includes("canvas.toDataURL('image/jpeg', .9)"), 'Hand upload should use compressed JPEG for faster fitting.');
 assert(backend.includes('slim worn chevron band'), 'Backend prompt should keep the ring small and neatly worn.');
 assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
 assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');
