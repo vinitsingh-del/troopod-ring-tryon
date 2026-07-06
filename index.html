@@ -498,8 +498,8 @@
 
       <aside class="tools">
         <div class="note">
-          <b>Mistral generated output</b>
-          <span>The hand is parsed for placement metrics, then Mistral generates the final try-on image with the ring seated on the target finger.</span>
+          <b>GPT Image output</b>
+          <span>The hand is parsed for placement metrics, then GPT Image generates the final try-on image with the ring seated on the target finger.</span>
         </div>
 
         <div class="ai-panel">
@@ -558,7 +558,7 @@
     </section>
 
     <div class="footer">
-      <span>Geometry metrics guide Mistral so the ring sits naturally on the selected finger.</span>
+      <span>Geometry metrics guide GPT Image so the ring sits naturally on the selected finger.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -795,7 +795,7 @@
       aiGenerateBtn.textContent = 'Generating...';
       stopCamera();
       if (!activeImageSrc) {
-        setAiStatus('Upload a hand image first so Mistral can generate the final try-on from that hand.');
+        setAiStatus('Upload a hand image first so GPT Image can generate the final try-on from that hand.');
         showToast('Upload a hand image first.');
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Generate Output';
@@ -803,7 +803,7 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Parsing hand geometry, then asking Mistral to generate the final output.');
+      setAiStatus('Parsing hand geometry, then asking GPT Image to generate the final output.');
 
       try {
         const generated = await generateRingImage();
@@ -814,7 +814,7 @@
           ring.style.display = 'none';
           aiResult.style.display = 'block';
           hint.style.display = 'none';
-          setAiStatus('Mistral output ready. Download Preview saves this result.');
+          setAiStatus('GPT Image output ready. Download Preview saves this result.');
           showToast('Output generated.');
         };
         aiResult.src = generated;

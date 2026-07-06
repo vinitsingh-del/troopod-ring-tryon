@@ -5,9 +5,10 @@ import { extname, resolve } from 'node:path';
 const PORT = Number(process.env.PORT || 8787);
 const WORKSPACE = resolve(process.cwd());
 const ENV_PATH = resolve(WORKSPACE, '.env.local');
-const MISTRAL_API_BASE = process.env.MISTRAL_API_BASE || 'https://api.mistral.ai/v1';
-const MISTRAL_IMAGE_MODEL = process.env.MISTRAL_IMAGE_MODEL || 'mistral-medium-latest';
-let mistralImageAgentId = process.env.MISTRAL_IMAGE_AGENT_ID || '';
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || '1024x1024';
+const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -79,200 +80,91 @@ function buildTryOnPrompt(payload) {
   const ringName = payload.ringName || 'selected MIA ring';
   const ringDescription = payload.ringDescription || ringName;
   const handPose = handSide === 'auto-detect'
-    ? 'Use a natural top-view hand pose with the back of the hand visible.'
-    : `Use a natural top-view ${handSide} pose.`;
+    ? 'Use the uploaded hand pose and camera angle.'
+    : `Use the uploaded ${handSide} pose and camera angle.`;
   const placementGuide = payload.placementGuide
     ? `Deterministic geometry guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Follow this placement guide closely when positioning the ring.`
-    : 'No deterministic placement guide was supplied; infer the finger base visually from the uploaded hand image.';
+    : 'Infer the selected finger base visually from the uploaded hand image.';
 
   return [
-    payload.handImage
-      ? 'Generate a realistic AI jewelry try-on image based on the uploaded user hand photo. Match the uploaded hand pose, camera angle, skin tone, nail style, and background as closely as possible.'
-      : 'Generate a close-up realistic AI jewelry virtual try-on photo of one human hand on a clean white or light gray surface, like an ecommerce jewelry preview.',
-    `The hand must be wearing ${ringDescription} on the ${finger}.`,
+    'Edit the uploaded user hand photo into a realistic jewelry virtual try-on image.',
+    'Preserve the uploaded hand, skin tone, nails, camera angle, and background as much as possible.',
+    `Add ${ringDescription} to the ${finger}.`,
     handPose,
     placementGuide,
-    'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top, with realistic scale, contact shadows, metal highlights, sparkle, and perspective.',
-    'Final output must be a generated image, not text. The visible ring should be loaded onto the uploaded hand photo style and placed automatically on the chosen finger.',
-    'For ring finger placement, put the ring on the finger between the middle and little finger, at the base of the proximal phalanx, below the first knuckle and just above the palm webbing.',
-    'Use natural skin texture, soft shadows from the hand, neat natural nails, and a centered product-photo composition. The result should look like a real uploaded hand try-on photo.',
-    'Do not add text, UI elements, labels, watermarks, sparkly logos, collage borders, or a standalone product shot.'
+    'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
+    'Use realistic scale, finger occlusion, contact shadows, metal highlights, sparkle, and perspective.',
+    'For ring finger placement, put the ring at the base of the proximal phalanx, below the first knuckle and just above the palm webbing.',
+    'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
 }
 
-async function callMistralImageGeneration(payload) {
-  const apiKey = process.env.MISTRAL_API_KEY;
+function imageFromDataUrl(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = match[1] === 'image/jpg' ? 'image/jpeg' : match[1];
+  const extension = mimeType.split('/')[1].replace('jpeg', 'jpg');
+  return {
+    blob: new Blob([Buffer.from(match[2], 'base64')], { type: mimeType }),
+    filename: `hand.${extension}`
+  };
+}
+
+async function callOpenAIImageGeneration(payload) {
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error('Mistral API key is not configured. Set MISTRAL_API_KEY in .env.local or the shell environment.');
+    throw new Error('OpenAI API key is not configured. Set OPENAI_API_KEY in .env.local or the backend host environment.');
+  }
+
+  const prompt = buildTryOnPrompt(payload);
+  const sourceImage = imageFromDataUrl(payload.handImage);
+  if (!sourceImage) {
+    throw new Error('Upload a hand image before generating the try-on output.');
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180_000);
   try {
-    const prompt = buildTryOnPrompt(payload);
-    const agentId = await getMistralImageAgent(apiKey, controller.signal);
-    const conversation = await startMistralImageConversation(apiKey, agentId, prompt, payload.handImage, controller.signal);
-    const fileId = findMistralToolFileId(conversation);
-    const imageUrl = findMistralGeneratedImageUrl(conversation);
-    if (!fileId && !imageUrl) {
-      throw new Error('Mistral did not return a generated image.');
+    const response = await callOpenAIImageEdit({ apiKey, prompt, sourceImage, signal: controller.signal });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = response.status === 429
+        ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Generate Output again.'
+        : data.error?.message || data.error || `OpenAI image generation failed (${response.status}).`;
+      throw new Error(message);
     }
-    const generatedImage = fileId
-      ? await downloadMistralFileAsBase64(apiKey, fileId, controller.signal)
-      : await downloadImageUrlAsBase64(imageUrl, controller.signal);
+
+    const imageBase64 = data.data?.[0]?.b64_json;
+    if (!imageBase64) {
+      throw new Error('OpenAI did not return a generated image.');
+    }
+
     return {
-      image: `data:${generatedImage.contentType};base64,${generatedImage.base64}`,
-      model: MISTRAL_IMAGE_MODEL,
-      provider: 'mistral-image-generation'
+      image: `data:image/${OPENAI_IMAGE_FORMAT};base64,${imageBase64}`,
+      model: OPENAI_IMAGE_MODEL,
+      provider: 'openai-gpt-image'
     };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function mistralJson(apiKey, path, body, signal) {
-  const response = await fetch(`${MISTRAL_API_BASE}${path}`, {
+async function callOpenAIImageEdit({ apiKey, prompt, sourceImage, signal }) {
+  const form = new FormData();
+  form.append('model', OPENAI_IMAGE_MODEL);
+  form.append('prompt', prompt);
+  form.append('image', sourceImage.blob, sourceImage.filename);
+  form.append('n', '1');
+  form.append('size', OPENAI_IMAGE_SIZE);
+  form.append('quality', OPENAI_IMAGE_QUALITY);
+  form.append('output_format', OPENAI_IMAGE_FORMAT);
+
+  return fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body),
-    signal
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = response.status === 429
-      ? 'Mistral is rate-limited right now. Wait a moment, then try Generate Output again.'
-      : data.message || data.error?.message || data.error || `Mistral API failed (${response.status}).`;
-    throw new Error(message);
-  }
-  return data;
-}
-
-async function getMistralImageAgent(apiKey, signal) {
-  if (mistralImageAgentId) return mistralImageAgentId;
-  const agent = await mistralJson(apiKey, '/agents', {
-    model: MISTRAL_IMAGE_MODEL,
-    name: 'Jewelry Try-On Image Generator',
-    description: 'Generates realistic jewelry virtual try-on images.',
-    instructions: 'Use image_generation whenever the user asks for a jewelry try-on image. If the user attaches a hand image, use it as the visual reference for the hand pose, skin tone, nails, camera angle, and background. The ring must sit neatly on the selected finger and look physically worn.',
-    tools: [{ type: 'image_generation' }],
-    completion_args: {
-      temperature: 0.3,
-      top_p: 0.95
-    }
-  }, signal);
-  mistralImageAgentId = agent.id;
-  return mistralImageAgentId;
-}
-
-async function startMistralImageConversation(apiKey, agentId, prompt, handImage, signal) {
-  const inputs = typeof handImage === 'string' && handImage
-    ? [{
-      role: 'user',
-      content: [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: handImage }
-      ]
-    }]
-    : prompt;
-  return mistralJson(apiKey, '/conversations', {
-    agent_id: agentId,
-    inputs,
-    store: false
-  }, signal);
-}
-
-function findMistralToolFileId(value) {
-  if (!value || typeof value !== 'object') return '';
-  if (value.type === 'tool_file' && value.file_id) return value.file_id;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findMistralToolFileId(item);
-      if (found) return found;
-    }
-    return '';
-  }
-  for (const child of Object.values(value)) {
-    const found = findMistralToolFileId(child);
-    if (found) return found;
-  }
-  return '';
-}
-
-async function downloadMistralFileAsBase64(apiKey, fileId, signal) {
-  const response = await fetch(`${MISTRAL_API_BASE}/files/${encodeURIComponent(fileId)}/content`, {
     headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: form,
     signal
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = data.message || data.error?.message || data.error || `Could not download Mistral image (${response.status}).`;
-    throw new Error(message);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  return {
-    base64: bytes.toString('base64'),
-    contentType: imageContentType(bytes, response.headers.get('content-type'))
-  };
-}
-
-function findMistralGeneratedImageUrl(value) {
-  if (!value || typeof value !== 'object') return '';
-  if (typeof value.url === 'string' && /^https?:\/\//.test(value.url)) return value.url;
-  if (typeof value.result === 'string') {
-    try {
-      const parsed = JSON.parse(value.result);
-      if (typeof parsed.url === 'string' && /^https?:\/\//.test(parsed.url)) return parsed.url;
-    } catch {}
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findMistralGeneratedImageUrl(item);
-      if (found) return found;
-    }
-    return '';
-  }
-  for (const child of Object.values(value)) {
-    const found = findMistralGeneratedImageUrl(child);
-    if (found) return found;
-  }
-  return '';
-}
-
-async function downloadImageUrlAsBase64(url, signal) {
-  const response = await fetch(url, { signal });
-  if (!response.ok) {
-    throw new Error(`Could not download generated image (${response.status}).`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  return {
-    base64: bytes.toString('base64'),
-    contentType: imageContentType(bytes, response.headers.get('content-type'))
-  };
-}
-
-function imageContentType(bytes, headerType) {
-  if (headerType && headerType.startsWith('image/')) return headerType;
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
-  if (
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) return 'image/png';
-  if (
-    bytes[0] === 0x52 &&
-    bytes[1] === 0x49 &&
-    bytes[2] === 0x46 &&
-    bytes[3] === 0x46 &&
-    bytes[8] === 0x57 &&
-    bytes[9] === 0x45 &&
-    bytes[10] === 0x42 &&
-    bytes[11] === 0x50
-  ) return 'image/webp';
-  return 'image/jpeg';
 }
 
 export async function handleFitRing(req, res) {
@@ -283,9 +175,9 @@ export async function handleFitRing(req, res) {
   if (req.method === 'GET') {
     sendJson(res, 200, {
       ok: true,
-      provider: 'mistral-image-generation',
-      model: MISTRAL_IMAGE_MODEL,
-      hasMistralKey: Boolean(process.env.MISTRAL_API_KEY)
+      provider: 'openai-gpt-image',
+      model: OPENAI_IMAGE_MODEL,
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY)
     });
     return;
   }
@@ -295,7 +187,7 @@ export async function handleFitRing(req, res) {
   }
   try {
     const payload = await readJson(req);
-    const result = await callMistralImageGeneration(payload);
+    const result = await callOpenAIImageGeneration(payload);
     sendJson(res, 200, result);
   } catch (error) {
     const status = /api key|configured/i.test(error.message) ? 503 : 500;
