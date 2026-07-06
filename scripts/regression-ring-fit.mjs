@@ -30,13 +30,14 @@ assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve back
 assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
 assert(!html.includes('TROOLLM Image uses the uploaded hand'), 'Frontend should not show the removed explanatory note.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
-assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'low'"), 'Image quality should default to low for faster generation.');
+assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high'"), 'Image quality should default to high for better product fidelity.');
 assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images edit must use the original hand as the base image.');
 assert(backend.includes('You are performing a realistic jewelry virtual try-on edit.'), 'Backend must use the clean GPT-only prompt.');
 assert(backend.includes('Mask: only the small ring-placement zone'), 'Backend prompt must describe the edit mask.');
 assert(backend.includes('Do not redesign the ring'), 'Backend prompt must protect product design.');
 assert(backend.includes('No full image regeneration'), 'Backend prompt must prevent full-image regeneration.');
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
+assert(html.includes("'ring finger': { x: 45, y: 41, w: 18, h: 12"), 'Ring-finger mask should use the visually tested placement zone.');
 
 const before = dimensions(beforePath);
 const after = dimensions(afterPath);
