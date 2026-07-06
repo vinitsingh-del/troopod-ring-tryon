@@ -965,10 +965,7 @@
     });
 
     async function generateFullGptTryOnImage(fit) {
-      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
-        throw new Error('Backend URL is not configured for TROOLLM image generation on this hosted page.');
-      }
-      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
+      const endpoint = getBackendEndpoint('/api/fit-ring');
       const variant = getSelectedVariant();
       const handPayload = await getHandImagePayload();
       const ringImage = await getProductImageDataUrl(variant.productSrc);
@@ -1174,10 +1171,7 @@
     }
 
     async function generateGptPlacementFit() {
-      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
-        throw new Error('Backend URL is not configured for TROOLLM placement on this hosted page.');
-      }
-      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/place-ring').replace(/\/$/, '');
+      const endpoint = getBackendEndpoint('/api/place-ring');
       const variant = getSelectedVariant();
       const handImage = await getHandPlacementImageDataUrl();
       const ringImage = await getProductImageDataUrl(variant.productSrc);
@@ -1200,6 +1194,17 @@
       }
       if (!data.placement) throw new Error('TROOLLM did not return placement geometry.');
       return convertGptPlacementToFit(data.placement);
+    }
+
+    function getBackendEndpoint(path) {
+      const cleanedPath = path.startsWith('/') ? path : `/${path}`;
+      if (window.TROOPOD_BACKEND_URL) {
+        return `${String(window.TROOPOD_BACKEND_URL).replace(/\/$/, '')}${cleanedPath}`;
+      }
+      if (/\.github\.io$/i.test(location.hostname)) {
+        return `http://127.0.0.1:8787${cleanedPath}`;
+      }
+      return cleanedPath;
     }
 
     async function getHandPlacementImageDataUrl() {

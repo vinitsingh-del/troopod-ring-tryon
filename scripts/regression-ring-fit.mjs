@@ -23,6 +23,8 @@ assert(existsSync(afterPath), 'Missing reference after image.');
 assert(html.includes('getFingerSegmentMaskGeometry'), 'Missing finger-segment mask geometry.');
 assert(html.includes('Use GPT Image edit to generate the selected product ring directly'), 'Frontend must request GPT-led ring fitting.');
 assert(!html.includes('draftImage,'), 'Frontend should not send a rough ring overlay as the edit base.');
+assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve backend endpoints for hosted and local pages.');
+assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
 assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images edit must use the original hand as the base image.');
 assert(backend.includes('Generate the ring placement yourself'), 'Backend prompt must let GPT place the ring inside the protected mask.');
