@@ -512,8 +512,8 @@
 
       <aside class="tools">
         <div class="note">
-          <b>Exact product try-on</b>
-          <span>Upload a hand photo, choose a catalog ring, and the app places that exact product image without repainting the hand.</span>
+          <b>GPT guided exact try-on</b>
+          <span>GPT chooses the placement. Canvas creates the final image with the original hand and exact product image.</span>
         </div>
 
         <div class="ai-panel">
@@ -575,7 +575,7 @@
     </section>
 
     <div class="footer">
-      <span>The final output keeps the original hand photo and selected product image intact.</span>
+      <span>GPT provides placement geometry only; the final output keeps the original hand photo and selected product image intact.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -729,7 +729,7 @@
       stage.dataset.fitTap = '0';
       ringState = { ...defaultRing };
       applyRing();
-      setAiStatus('Upload a hand image, choose the product and finger, then create the exact try-on image.');
+      setAiStatus('Upload a hand image, choose the product and finger, then let GPT guide exact placement.');
     }
 
     variantList.addEventListener('click', event => {
@@ -905,10 +905,17 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Detecting the finger and creating the final image without changing the hand or product.');
+      setAiStatus('Asking GPT for placement geometry, then rendering the exact final image.');
 
       try {
-        const fit = await generateLandmarkFit();
+        let fit;
+        try {
+          fit = await generateGptPlacementFit();
+        } catch (gptError) {
+          console.warn(gptError);
+          setAiStatus('GPT placement was unavailable, using local hand detection instead.');
+          fit = await generateLandmarkFit();
+        }
         applyLandmarkFit(fit);
         await applySelectedProductCutout();
         const generated = await renderExactTryOnImage();
@@ -980,6 +987,73 @@
       ctx.restore();
 
       return canvas.toDataURL('image/png');
+    }
+
+    async function generateGptPlacementFit() {
+      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
+        throw new Error('Backend URL is not configured for GPT placement on this hosted page.');
+      }
+      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/place-ring').replace(/\/$/, '');
+      const variant = getSelectedVariant();
+      const handImage = await getHandPlacementImageDataUrl();
+      const ringImage = await getProductImageDataUrl(variant.productSrc);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          finger: fingerSelect.value,
+          handSide: handSelect.value,
+          ringName: variant.name,
+          ringPrice: variant.price,
+          ringDescription: variant.description,
+          handImage,
+          ringImage
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `GPT placement failed (${response.status}).`);
+      }
+      if (!data.placement) throw new Error('GPT did not return placement geometry.');
+      return convertGptPlacementToFit(data.placement);
+    }
+
+    async function getHandPlacementImageDataUrl() {
+      const img = getCurrentHandImage();
+      if (!img.complete || !img.naturalWidth) return '';
+      const maxSide = 768;
+      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', .86);
+    }
+
+    async function getProductImageDataUrl(src) {
+      const img = await loadDrawable(src);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    }
+
+    function convertGptPlacementToFit(placement) {
+      const imageRect = getDisplayedImageRect(getCurrentHandImage());
+      const variant = getSelectedVariant();
+      const xImagePercent = clampNumber(placement.xImagePercent, 2, 98);
+      const yImagePercent = clampNumber(placement.yImagePercent, 2, 98);
+      const ringWidthImagePercent = clampNumber(placement.ringWidthImagePercent, 3, 35);
+      return {
+        xStagePercent: (imageRect.left + xImagePercent / 100 * imageRect.width) / imageRect.stageWidth * 100,
+        yStagePercent: (imageRect.top + yImagePercent / 100 * imageRect.height) / imageRect.stageHeight * 100,
+        widthPx: ringWidthImagePercent / 100 * imageRect.width * (variant.fitScale || 1),
+        rotationDeg: clampNumber(placement.rotationDeg || 0, -28, 28),
+        note: `GPT placement (${Math.round((placement.confidence || 0) * 100)}% confidence).`
+      };
     }
 
     ring.addEventListener('pointerdown', event => {

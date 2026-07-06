@@ -9,6 +9,7 @@ const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || '1024x1024';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
+const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -188,6 +189,113 @@ async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, si
   });
 }
 
+function buildPlacementPrompt(payload) {
+  return [
+    'You are a virtual jewelry try-on placement engine.',
+    'Analyze the first image as the user hand photo and the second image as the exact selected ring product.',
+    'Return only placement geometry. Do not generate or edit any image.',
+    `Target finger: ${payload.finger || 'ring finger'}.`,
+    `Hand side hint: ${payload.handSide || 'auto-detect'}.`,
+    `Ring product: ${payload.ringName || 'selected ring'} (${payload.ringDescription || 'catalog ring'}).`,
+    'Choose the center point where the ring should sit naturally at the base of the selected finger.',
+    'Estimate the ring width as a percent of the hand image width so the ring fits snugly around the finger.',
+    'Estimate the rotation in degrees so the ring is perpendicular to the selected finger direction.',
+    'The final renderer will place the original product image directly on the original hand photo, so be precise and conservative.'
+  ].join('\n');
+}
+
+async function callOpenAIPlacement(payload) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OpenAI API key is not configured. Set OPENAI_API_KEY in .env.local or the backend host environment.');
+  }
+  if (!payload.handImage || !payload.ringImage) {
+    throw new Error('Hand and ring images are required for GPT placement.');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: OPENAI_PLACEMENT_MODEL,
+      temperature: 0.1,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: buildPlacementPrompt(payload) },
+            { type: 'image_url', image_url: { url: payload.handImage, detail: 'high' } },
+            { type: 'image_url', image_url: { url: payload.ringImage, detail: 'low' } }
+          ]
+        }
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'ring_tryon_placement',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              xImagePercent: { type: 'number', minimum: 0, maximum: 100 },
+              yImagePercent: { type: 'number', minimum: 0, maximum: 100 },
+              ringWidthImagePercent: { type: 'number', minimum: 3, maximum: 35 },
+              rotationDeg: { type: 'number', minimum: -45, maximum: 45 },
+              confidence: { type: 'number', minimum: 0, maximum: 1 },
+              reason: { type: 'string' }
+            },
+            required: ['xImagePercent', 'yImagePercent', 'ringWidthImagePercent', 'rotationDeg', 'confidence', 'reason']
+          }
+        }
+      }
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error?.message || data.error || `OpenAI placement failed (${response.status}).`);
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error('OpenAI did not return placement geometry.');
+  const placement = JSON.parse(content);
+  return {
+    provider: 'openai-gpt-placement',
+    model: OPENAI_PLACEMENT_MODEL,
+    placement
+  };
+}
+
+async function handlePlaceRing(req, res) {
+  if (req.method === 'OPTIONS') {
+    sendJson(res, 204, {});
+    return;
+  }
+  if (req.method === 'GET') {
+    sendJson(res, 200, {
+      ok: true,
+      provider: 'openai-gpt-placement',
+      model: OPENAI_PLACEMENT_MODEL,
+      hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY)
+    });
+    return;
+  }
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+  try {
+    const payload = await readJson(req);
+    const result = await callOpenAIPlacement(payload);
+    sendJson(res, 200, result);
+  } catch (error) {
+    const status = /api key|configured/i.test(error.message) ? 503 : 500;
+    sendJson(res, status, { error: error.message || 'Placement failed.' });
+  }
+}
+
 export async function handleFitRing(req, res) {
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, {});
@@ -252,6 +360,10 @@ function serveStatic(req, res) {
 const isDirectRun = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isDirectRun) {
   const server = http.createServer(async (req, res) => {
+    if (req.url?.startsWith('/api/place-ring')) {
+      await handlePlaceRing(req, res);
+      return;
+    }
     if (req.url?.startsWith('/api/fit-ring') || req.url?.startsWith('/health')) {
       await handleFitRing(req, res);
       return;
