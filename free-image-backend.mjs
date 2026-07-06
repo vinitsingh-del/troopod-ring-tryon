@@ -109,6 +109,7 @@ function buildTryOnPrompt(payload) {
     '- Add natural highlights and reflections matching the lighting of the hand photo.',
     '- Slightly hide/occlude the back/lower parts of the ring where they would go behind the finger.',
     '- Maintain realistic scale: the ring should sit snugly around the finger, neither floating nor oversized.',
+    '- Make the ring a slim worn chevron band, not a large object. The V-shaped front should face the camera and sit snugly across the finger width.',
     '- Keep the final output like a real e-commerce jewelry try-on photograph.',
     '',
     'PLACEMENT:',

@@ -37,7 +37,8 @@ assert(backend.includes('Mask: only the small ring-placement zone'), 'Backend pr
 assert(backend.includes('Do not redesign the ring'), 'Backend prompt must protect product design.');
 assert(backend.includes('No full image regeneration'), 'Backend prompt must prevent full-image regeneration.');
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
-assert(html.includes("'ring finger': { x: 45, y: 41, w: 18, h: 12"), 'Ring-finger mask should use the visually tested placement zone.');
+assert(html.includes("'ring finger': { x: 45.5, y: 40.5, w: 13, h: 8.6"), 'Ring-finger mask should use the visually tested snug placement zone.');
+assert(backend.includes('slim worn chevron band'), 'Backend prompt should keep the ring small and neatly worn.');
 
 const before = dimensions(beforePath);
 const after = dimensions(afterPath);
