@@ -937,9 +937,10 @@
       }
       const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
       const variant = getSelectedVariant();
-      const handImage = await getHandImageDataUrl();
-      const ringImage = await getProductImageDataUrl(variant.productSrc);
       const placementGuide = await getPlacementGuide();
+      const handPayload = await getHandImagePayload();
+      const ringImage = await getProductImageDataUrl(variant.productSrc);
+      const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -949,8 +950,9 @@
           ringName: variant.name,
           ringPrice: variant.price,
           ringDescription: variant.description,
-          handImage,
+          handImage: handPayload.dataUrl,
           ringImage,
+          maskImage,
           placementGuide
         })
       });
@@ -962,9 +964,9 @@
       return data.image;
     }
 
-    async function getHandImageDataUrl() {
+    async function getHandImagePayload() {
       const img = getCurrentHandImage();
-      if (!img.complete || !img.naturalWidth) return '';
+      if (!img.complete || !img.naturalWidth) return { dataUrl: '', width: 0, height: 0 };
       const maxSide = 1024;
       const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
       const canvas = document.createElement('canvas');
@@ -972,7 +974,11 @@
       canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', .9);
+      return {
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height
+      };
     }
 
     async function getProductImageDataUrl(src) {
@@ -995,6 +1001,11 @@
             x: Number(fit.xStagePercent.toFixed(2)),
             y: Number(fit.yStagePercent.toFixed(2))
           },
+          centerImagePercent: {
+            x: Number((fit.xImagePercent ?? fit.xStagePercent).toFixed(2)),
+            y: Number((fit.yImagePercent ?? fit.yStagePercent).toFixed(2))
+          },
+          ringWidthImagePercent: Number((fit.widthImagePercent || 10).toFixed(2)),
           ringWidthPx: Math.round(fit.widthPx),
           rotationDeg: Number(fit.rotationDeg.toFixed(1)),
           instruction: 'Place the selected product ring centered at these coordinates on the selected finger base. Match this rotation and scale. The ring must wrap naturally around the finger with realistic occlusion and contact shadow.'
@@ -1003,9 +1014,45 @@
         return {
           available: false,
           targetFinger: fingerSelect.value,
+          centerImagePercent: getFallbackMaskCenter(),
+          ringWidthImagePercent: 12,
           instruction: 'No reliable landmarks were detected. Place the selected product ring at the base of the selected finger, below the first knuckle, with natural wrap, occlusion, and contact shadow.'
         };
       }
+    }
+
+    function createEditMaskDataUrl(width, height, placementGuide) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const center = placementGuide.centerImagePercent || getFallbackMaskCenter();
+      const cx = clampNumber(center.x, 4, 96) / 100 * canvas.width;
+      const cy = clampNumber(center.y, 4, 96) / 100 * canvas.height;
+      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
+      const radiusX = Math.max(56, canvas.width * ringPercent * 1.8);
+      const radiusY = Math.max(42, radiusX * .72);
+
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      return canvas.toDataURL('image/png');
+    }
+
+    function getFallbackMaskCenter() {
+      const presets = {
+        thumb: { x: 79, y: 59 },
+        'index finger': { x: 37, y: 50 },
+        'middle finger': { x: 49, y: 47 },
+        'ring finger': { x: 44.6, y: 48.2 },
+        'little finger': { x: 66, y: 58 }
+      };
+      return presets[fingerSelect.value] || presets['ring finger'];
     }
 
     ring.addEventListener('pointerdown', event => {
@@ -1176,6 +1223,9 @@
       return {
         xStagePercent: centerPx.x / imageRect.stageWidth * 100,
         yStagePercent: centerPx.y / imageRect.stageHeight * 100,
+        xImagePercent: (centerPx.x - imageRect.left) / imageRect.width * 100,
+        yImagePercent: (centerPx.y - imageRect.top) / imageRect.height * 100,
+        widthImagePercent: width / imageRect.width * 100,
         widthPx: width,
         rotationDeg: rotation,
         note: 'Ring fitted to detected finger landmarks.'

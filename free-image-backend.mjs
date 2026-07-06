@@ -89,7 +89,9 @@ function buildTryOnPrompt(payload) {
   return [
     'Edit the first uploaded image, which is the user hand photo, into a realistic jewelry virtual try-on image.',
     'Use the second uploaded image only as the exact ring product reference.',
-    'Preserve the uploaded hand photo, skin tone, nails, camera angle, lighting, and background as much as possible.',
+    'The mask marks the only area that may change. Outside the transparent mask area, preserve the uploaded hand photo pixel-for-pixel as much as the image edit API allows.',
+    'Do not redraw the hand, nails, wrist, jewelry already on the hand, background, camera angle, or lighting outside the masked ring placement area.',
+    'Inside the masked area, make the smallest possible realistic edit needed to seat the ring naturally on the finger.',
     `Place the exact selected product, ${ringName}, on the ${finger}. Product description: ${ringDescription}.`,
     handPose,
     placementGuide,
@@ -128,6 +130,7 @@ async function callOpenAIImageGeneration(payload) {
   if (!ringImage) {
     throw new Error('Choose a ring product before generating the try-on output.');
   }
+  const maskImage = imageFromDataUrl(payload.maskImage, 'ring-edit-mask');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180_000);
@@ -136,6 +139,7 @@ async function callOpenAIImageGeneration(payload) {
       apiKey,
       prompt,
       sourceImages: [sourceImage, ringImage],
+      maskImage,
       signal: controller.signal
     });
     const data = await response.json().catch(() => ({}));
@@ -161,12 +165,15 @@ async function callOpenAIImageGeneration(payload) {
   }
 }
 
-async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, signal }) {
+async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, signal }) {
   const form = new FormData();
   form.append('model', OPENAI_IMAGE_MODEL);
   form.append('prompt', prompt);
   for (const sourceImage of sourceImages) {
     form.append('image[]', sourceImage.blob, sourceImage.filename);
+  }
+  if (maskImage) {
+    form.append('mask', maskImage.blob, maskImage.filename);
   }
   form.append('n', '1');
   form.append('size', OPENAI_IMAGE_SIZE);
