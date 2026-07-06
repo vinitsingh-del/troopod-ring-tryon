@@ -512,8 +512,8 @@
 
       <aside class="tools">
         <div class="note">
-          <b>Virtual try-on</b>
-          <span>Upload a hand photo, choose a catalog ring, and the app fits that exact product image neatly onto the selected finger.</span>
+          <b>GPT Image try-on</b>
+          <span>Upload a hand photo, choose a catalog ring, and GPT Image generates the final photo with that product placed on the selected finger.</span>
         </div>
 
         <div class="ai-panel">
@@ -575,7 +575,7 @@
     </section>
 
     <div class="footer">
-      <span>The hand photo and product image stay unchanged; the app only places the chosen ring visually.</span>
+      <span>GPT Image uses the uploaded hand and selected product image to create the final try-on photo.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -729,7 +729,7 @@
       stage.dataset.fitTap = '0';
       ringState = { ...defaultRing };
       applyRing();
-      setAiStatus('Upload a hand image, choose the product and finger, then fit the ring.');
+      setAiStatus('Upload a hand image, choose the product and finger, then generate the try-on image.');
     }
 
     variantList.addEventListener('click', event => {
@@ -894,10 +894,10 @@
 
     aiGenerateBtn.addEventListener('click', async () => {
       aiGenerateBtn.disabled = true;
-      aiGenerateBtn.textContent = 'Fitting...';
+      aiGenerateBtn.textContent = 'Generating...';
       stopCamera();
       if (!activeImageSrc) {
-        setAiStatus('Upload a hand image first so the product can be fitted onto that hand.');
+        setAiStatus('Upload a hand image first so GPT Image can place the product on that hand.');
         showToast('Upload a hand image first.');
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
@@ -905,30 +905,108 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Detecting the finger and fitting the selected product.');
+      setAiStatus('Reading the finger placement and generating the final GPT Image output.');
 
       try {
-        const fit = await generateLandmarkFit();
-        applyLandmarkFit(fit);
-        await applySelectedProductCutout();
-        aiResultSrc = '';
-        showCurrentHandImage();
-        showRing();
-        setAiStatus(`${getSelectedVariant().name} fitted on the selected finger. Download Preview saves this composition.`);
-        showToast('Product fitted.');
+        const generated = await generateRingImage();
+        aiResultSrc = generated;
+        aiResult.onload = () => {
+          reference.style.display = 'none';
+          finger.style.display = 'none';
+          ring.style.display = 'none';
+          aiResult.style.display = 'block';
+          hint.style.display = 'none';
+          setAiStatus(`${getSelectedVariant().name} generated on the selected finger. Download Preview saves this GPT Image result.`);
+          showToast('Output generated.');
+        };
+        aiResult.src = generated;
       } catch (error) {
         console.error(error);
-        applyFallbackFit();
-        await applySelectedProductCutout();
         showCurrentHandImage();
-        showRing();
-        setAiStatus('Product fitted with fallback placement. Use a clear top-view hand photo for best automatic fit.');
-        showToast('Product fitted.');
+        setAiStatus(error.message || 'Could not generate the final try-on image.');
+        showToast(error.message || 'Generation failed.');
       } finally {
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
       }
     });
+
+    async function generateRingImage() {
+      if (/\.github\.io$/i.test(location.hostname) && !window.TROOPOD_BACKEND_URL) {
+        throw new Error('Backend URL is not configured for this hosted page.');
+      }
+      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
+      const variant = getSelectedVariant();
+      const handImage = await getHandImageDataUrl();
+      const ringImage = await getProductImageDataUrl(variant.productSrc);
+      const placementGuide = await getPlacementGuide();
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          finger: fingerSelect.value,
+          handSide: handSelect.value,
+          ringName: variant.name,
+          ringPrice: variant.price,
+          ringDescription: variant.description,
+          handImage,
+          ringImage,
+          placementGuide
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `Image backend failed (${response.status}).`);
+      }
+      if (!data.image) throw new Error('Image backend did not return a generated image.');
+      return data.image;
+    }
+
+    async function getHandImageDataUrl() {
+      const img = getCurrentHandImage();
+      if (!img.complete || !img.naturalWidth) return '';
+      const maxSide = 1024;
+      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', .9);
+    }
+
+    async function getProductImageDataUrl(src) {
+      const img = await loadDrawable(src);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    }
+
+    async function getPlacementGuide() {
+      try {
+        const fit = await generateLandmarkFit();
+        return {
+          available: true,
+          targetFinger: fingerSelect.value,
+          centerStagePercent: {
+            x: Number(fit.xStagePercent.toFixed(2)),
+            y: Number(fit.yStagePercent.toFixed(2))
+          },
+          ringWidthPx: Math.round(fit.widthPx),
+          rotationDeg: Number(fit.rotationDeg.toFixed(1)),
+          instruction: 'Place the selected product ring centered at these coordinates on the selected finger base. Match this rotation and scale. The ring must wrap naturally around the finger with realistic occlusion and contact shadow.'
+        };
+      } catch {
+        return {
+          available: false,
+          targetFinger: fingerSelect.value,
+          instruction: 'No reliable landmarks were detected. Place the selected product ring at the base of the selected finger, below the first knuckle, with natural wrap, occlusion, and contact shadow.'
+        };
+      }
+    }
 
     ring.addEventListener('pointerdown', event => {
       event.preventDefault();

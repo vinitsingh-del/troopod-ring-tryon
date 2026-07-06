@@ -87,26 +87,29 @@ function buildTryOnPrompt(payload) {
     : 'Infer the selected finger base visually from the uploaded hand image.';
 
   return [
-    'Edit the uploaded user hand photo into a realistic jewelry virtual try-on image.',
-    'Preserve the uploaded hand, skin tone, nails, camera angle, and background as much as possible.',
-    `Add ${ringDescription} to the ${finger}.`,
+    'Edit the first uploaded image, which is the user hand photo, into a realistic jewelry virtual try-on image.',
+    'Use the second uploaded image only as the exact ring product reference.',
+    'Preserve the uploaded hand photo, skin tone, nails, camera angle, lighting, and background as much as possible.',
+    `Place the exact selected product, ${ringName}, on the ${finger}. Product description: ${ringDescription}.`,
     handPose,
     placementGuide,
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
+    'Keep the product design faithful to the ring reference: same metal color, stone color, silhouette, and distinctive details.',
     'Use realistic scale, finger occlusion, contact shadows, metal highlights, sparkle, and perspective.',
     'For ring finger placement, put the ring at the base of the proximal phalanx, below the first knuckle and just above the palm webbing.',
+    'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
 }
 
-function imageFromDataUrl(dataUrl) {
+function imageFromDataUrl(dataUrl, fallbackName = 'image') {
   const match = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/);
   if (!match) return null;
   const mimeType = match[1] === 'image/jpg' ? 'image/jpeg' : match[1];
   const extension = mimeType.split('/')[1].replace('jpeg', 'jpg');
   return {
     blob: new Blob([Buffer.from(match[2], 'base64')], { type: mimeType }),
-    filename: `hand.${extension}`
+    filename: `${fallbackName}.${extension}`
   };
 }
 
@@ -117,19 +120,28 @@ async function callOpenAIImageGeneration(payload) {
   }
 
   const prompt = buildTryOnPrompt(payload);
-  const sourceImage = imageFromDataUrl(payload.handImage);
+  const sourceImage = imageFromDataUrl(payload.handImage, 'hand');
   if (!sourceImage) {
     throw new Error('Upload a hand image before generating the try-on output.');
+  }
+  const ringImage = imageFromDataUrl(payload.ringImage, 'selected-ring');
+  if (!ringImage) {
+    throw new Error('Choose a ring product before generating the try-on output.');
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180_000);
   try {
-    const response = await callOpenAIImageEdit({ apiKey, prompt, sourceImage, signal: controller.signal });
+    const response = await callOpenAIImageEdit({
+      apiKey,
+      prompt,
+      sourceImages: [sourceImage, ringImage],
+      signal: controller.signal
+    });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const message = response.status === 429
-        ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Generate Output again.'
+        ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Fit Product again.'
         : data.error?.message || data.error || `OpenAI image generation failed (${response.status}).`;
       throw new Error(message);
     }
@@ -149,11 +161,13 @@ async function callOpenAIImageGeneration(payload) {
   }
 }
 
-async function callOpenAIImageEdit({ apiKey, prompt, sourceImage, signal }) {
+async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, signal }) {
   const form = new FormData();
   form.append('model', OPENAI_IMAGE_MODEL);
   form.append('prompt', prompt);
-  form.append('image', sourceImage.blob, sourceImage.filename);
+  for (const sourceImage of sourceImages) {
+    form.append('image[]', sourceImage.blob, sourceImage.filename);
+  }
   form.append('n', '1');
   form.append('size', OPENAI_IMAGE_SIZE);
   form.append('quality', OPENAI_IMAGE_QUALITY);
