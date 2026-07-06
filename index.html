@@ -31,53 +31,53 @@
         linear-gradient(180deg, #fff 0%, #fff8f8 100%);
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 14px;
     }
 
     .tool {
-      width: min(1120px, 100%);
+      width: min(980px, 100%);
       border: 1px solid var(--line);
-      border-radius: 26px;
+      border-radius: 20px;
       background: rgba(255,255,255,.94);
       box-shadow: var(--shadow);
-      padding: clamp(18px, 3vw, 28px);
+      padding: clamp(12px, 2vw, 18px);
     }
 
     .head {
       display: flex;
       align-items: baseline;
-      gap: 16px;
-      margin-bottom: 12px;
+      gap: 8px;
+      margin-bottom: 8px;
     }
 
     .kicker {
       color: var(--brand);
-      font-size: 14px;
+      font-size: 11px;
       font-weight: 800;
       letter-spacing: .16em;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(26px, 3vw, 34px);
+      font-size: clamp(20px, 2.4vw, 26px);
       line-height: 1.05;
       letter-spacing: 0;
     }
 
     .workspace {
       display: grid;
-      gap: 14px;
+      gap: 6px;
       border: 1px solid var(--line);
-      border-radius: 22px;
+      border-radius: 16px;
       background: #fff;
-      padding: 16px;
+      padding: 10px;
     }
 
     .stage {
       position: relative;
-      min-height: 380px;
-      aspect-ratio: 1.12 / 1;
-      border-radius: 20px;
+      min-height: 320px;
+      aspect-ratio: 1.18 / 1;
+      border-radius: 14px;
       overflow: hidden;
       background:
         linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,247,248,.84)),
@@ -187,51 +187,51 @@
       position: absolute;
       left: 9%;
       bottom: 8%;
-      width: min(330px, 78%);
-      border-radius: 18px;
+      width: min(280px, 76%);
+      border-radius: 14px;
       background: rgba(255,255,255,.82);
       backdrop-filter: blur(18px);
       border: 1px solid rgba(255,255,255,.7);
-      padding: 18px 22px;
+      padding: 12px 14px;
       z-index: 3;
     }
 
     .hint-card b {
       display: block;
-      font-size: 20px;
+      font-size: 16px;
       line-height: 1.12;
-      margin-bottom: 12px;
+      margin-bottom: 6px;
     }
 
     .hint-card span {
       color: var(--muted);
-      font-size: 15px;
+      font-size: 12px;
       line-height: 1.45;
     }
 
     .tools {
       display: grid;
-      gap: 14px;
+      gap: 10px;
       align-content: start;
     }
 
     .note {
       border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 18px;
+      border-radius: 12px;
+      padding: 12px;
       background: linear-gradient(180deg, #fff 0%, #fff7f8 100%);
     }
 
     .note b {
       display: block;
-      font-size: 17px;
-      margin-bottom: 6px;
+      font-size: 14px;
+      margin-bottom: 4px;
     }
 
     .note span {
       color: var(--muted);
       line-height: 1.45;
-      font-size: 14px;
+      font-size: 12px;
     }
 
     .actions {
@@ -250,8 +250,8 @@
 
     button,
     .upload {
-      min-height: 56px;
-      border-radius: 14px;
+      min-height: 44px;
+      border-radius: 10px;
       border: 2px solid var(--brand);
       background: #fff;
       color: var(--brand);
@@ -260,7 +260,7 @@
       justify-content: center;
       gap: 8px;
       font: inherit;
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 800;
       cursor: pointer;
       transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
@@ -287,7 +287,7 @@
 
     .sliders {
       display: grid;
-      gap: 16px;
+      gap: 10px;
       padding-top: 2px;
     }
 
@@ -305,20 +305,20 @@
       display: grid;
       gap: 10px;
       border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 14px;
+      border-radius: 12px;
+      padding: 10px;
       background: #fff;
     }
 
     .ai-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
     }
 
     .ai-field {
       display: grid;
-      gap: 7px;
+      gap: 5px;
       font-size: 11px;
       font-weight: 800;
       color: #aaa3a8;
@@ -331,12 +331,12 @@
     .ai-field input,
     .ai-field select {
       width: 100%;
-      min-height: 44px;
+      min-height: 36px;
       border: 1.5px solid var(--line);
-      border-radius: 12px;
-      padding: 0 12px;
+      border-radius: 9px;
+      padding: 0 10px;
       font: inherit;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--ink);
       background: #fff;
@@ -363,20 +363,20 @@
       gap: 7px;
       justify-items: center;
       border: 1.5px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 6px;
+      border-radius: 9px;
+      padding: 7px 5px;
       background: #fff;
       color: var(--ink);
-      font-size: 11px;
+      font-size: 10px;
       line-height: 1.15;
       text-align: center;
     }
 
     .variant-card img {
-      width: 74px;
-      height: 74px;
+      width: 58px;
+      height: 58px;
       object-fit: contain;
-      border-radius: 10px;
+      border-radius: 8px;
       background: #f6f4f1;
     }
 
@@ -428,9 +428,9 @@
       gap: 12px;
       flex-wrap: wrap;
       align-items: center;
-      margin-top: 14px;
+      margin-top: 8px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 11px;
     }
 
     .powered {
@@ -461,8 +461,8 @@
     }
 
     @media (min-width: 760px) {
-      .workspace { grid-template-columns: minmax(0, 1.1fr) minmax(310px, .9fr); }
-      .stage { min-height: 450px; }
+      .workspace { grid-template-columns: minmax(0, 1.08fr) minmax(280px, .82fr); }
+      .stage { min-height: 360px; }
     }
 
     @media (max-width: 520px) {
