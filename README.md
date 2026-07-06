@@ -1,6 +1,6 @@
 # TrooPod Ring Try-On
 
-Deterministic/GPT Image-guided jewelry virtual try-on prototype.
+Deterministic jewelry virtual try-on prototype for fitting catalog ring product images onto an uploaded hand photo.
 
 ## Run Locally
 
@@ -10,17 +10,15 @@ npm start
 
 Then open `http://127.0.0.1:8787`.
 
-## Environment
+## Catalog Try-On
 
-Copy `.env.example` to `.env.local` and set:
+The GitHub Pages app runs in the browser:
 
-```bash
-OPENAI_API_KEY=your-openai-key-here
-```
+- Upload a hand photo.
+- Choose Gleam Play Diamond, Wave Ring, or Troquise Queen.
+- Pick the target finger.
+- Click `Fit Product` to place the exact selected product image on the hand photo.
 
-The API key must stay server-side. Do not put it in `index.html` or any browser JavaScript.
+## Optional Backend
 
-## GitHub Pages
-
-GitHub Pages can host the static UI, but it cannot run the Node backend or protect `OPENAI_API_KEY`.
-For live generation from a GitHub Pages URL, deploy `free-image-backend.mjs` to a server platform and set `window.TROOPOD_BACKEND_URL` to that backend URL.
+The Node backend is kept for future server-side image workflows. If you use it, keep any API keys in `.env.local` or the host environment. Do not put secrets in `index.html` or browser JavaScript.

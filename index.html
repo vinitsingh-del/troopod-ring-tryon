@@ -35,7 +35,7 @@
     }
 
     .tool {
-      width: min(980px, 100%);
+      width: min(1120px, 100%);
       border: 1px solid var(--line);
       border-radius: 26px;
       background: rgba(255,255,255,.94);
@@ -79,7 +79,9 @@
       aspect-ratio: 1.12 / 1;
       border-radius: 20px;
       overflow: hidden;
-      background: #faf8f7;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.92), rgba(255,247,248,.84)),
+        #faf8f7;
       border: 1px solid var(--line);
       touch-action: none;
       user-select: none;
@@ -120,7 +122,7 @@
       left: 50%;
       top: 76%;
       width: 110px;
-      aspect-ratio: 2 / 1;
+      aspect-ratio: 1 / 1;
       transform: translate(-50%, -50%) rotate(-8deg);
       transform-origin: center;
       filter: saturate(1.08) contrast(1.04);
@@ -136,10 +138,10 @@
     .ring::before {
       content: "";
       position: absolute;
-      left: 14%;
-      right: 14%;
-      top: 48%;
-      height: 38%;
+      left: 18%;
+      right: 18%;
+      top: 55%;
+      height: 28%;
       border-radius: 50%;
       background: radial-gradient(ellipse at center, rgba(50, 30, 22, .34) 0%, rgba(50, 30, 22, .18) 42%, transparent 72%);
       filter: blur(5px);
@@ -217,7 +219,7 @@
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 18px;
-      background: #fcfbfb;
+      background: linear-gradient(180deg, #fff 0%, #fff7f8 100%);
     }
 
     .note b {
@@ -352,17 +354,17 @@
     .variant-list {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
+      gap: 10px;
     }
 
     .variant-card {
       min-height: auto;
       display: grid;
-      gap: 6px;
+      gap: 7px;
       justify-items: center;
       border: 1.5px solid var(--line);
       border-radius: 12px;
-      padding: 8px 6px;
+      padding: 10px 6px;
       background: #fff;
       color: var(--ink);
       font-size: 11px;
@@ -371,11 +373,25 @@
     }
 
     .variant-card img {
-      width: 54px;
-      height: 54px;
+      width: 74px;
+      height: 74px;
       object-fit: contain;
       border-radius: 10px;
       background: #f6f4f1;
+    }
+
+    .variant-card .product-name {
+      color: var(--ink);
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .variant-card .product-price {
+      color: var(--brand);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: none;
     }
 
     .variant-card.active {
@@ -388,8 +404,6 @@
       outline: 3px solid rgba(214,77,103,.28);
       outline-offset: 2px;
     }
-
-    .manual-tools[hidden] { display: none; }
 
     input[type="range"] {
       width: 100%;
@@ -467,7 +481,7 @@
       .ai-grid { grid-template-columns: 1fr; }
       .variant-list { gap: 6px; }
       .variant-card { padding: 7px 4px; font-size: 10px; }
-      .variant-card img { width: 46px; height: 46px; }
+      .variant-card img { width: 52px; height: 52px; }
       .hint-card { left: 7%; bottom: 7%; padding: 15px; }
       .hint-card b { font-size: 17px; }
     }
@@ -488,18 +502,18 @@
         <video class="camera" id="camera" autoplay muted playsinline></video>
         <button class="capture primary" id="capture" type="button">Capture Photo</button>
         <div class="ring" id="ring" aria-label="Worn ring cutout" role="img">
-          <img class="ring-cutout" id="ringCutout" src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/ring-marked-clean.png" alt="">
+          <img class="ring-cutout" id="ringCutout" src="assets/products/gleam-play-diamond.png" alt="">
         </div>
         <div class="hint-card" id="hint" style="display: none;">
           <b>Real hand reference</b>
-          <span>Upload a hand image, choose a product and finger, then generate the final try-on output.</span>
+          <span>Upload a hand image, choose a product and finger, then place the selected ring neatly.</span>
         </div>
       </div>
 
       <aside class="tools">
         <div class="note">
-          <b>GPT Image output</b>
-          <span>The hand is parsed for placement metrics, then GPT Image generates the final try-on image with the ring seated on the target finger.</span>
+          <b>Virtual try-on</b>
+          <span>Upload a hand photo, choose a catalog ring, and the app fits that exact product image neatly onto the selected finger.</span>
         </div>
 
         <div class="ai-panel">
@@ -507,16 +521,19 @@
             Choose ring
             <div class="variant-list" id="variantList">
               <button type="button" class="variant-card active" data-variant="gleam">
-                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png" alt="">
-                <span>Gleam V</span>
+                <img src="assets/products/gleam-play-diamond.png" alt="">
+                <span class="product-name">Gleam Play Diamond</span>
+                <span class="product-price">INR 42K</span>
               </button>
-              <button type="button" class="variant-card" data-variant="solitaire">
-                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png" alt="">
-                <span>Solitaire</span>
+              <button type="button" class="variant-card" data-variant="wave">
+                <img src="assets/products/wave-ring.png" alt="">
+                <span class="product-name">Wave Ring</span>
+                <span class="product-price">INR 10K</span>
               </button>
-              <button type="button" class="variant-card" data-variant="lattice">
-                <img src="https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png" alt="">
-                <span>Lattice</span>
+              <button type="button" class="variant-card" data-variant="troquise">
+                <img src="assets/products/troquise-queen.png" alt="">
+                <span class="product-name">Troquise Queen</span>
+                <span class="product-price">INR 3K</span>
               </button>
             </div>
           </div>
@@ -540,13 +557,13 @@
               </select>
             </label>
           </div>
-          <button type="button" id="aiGenerateBtn" class="primary">Generate Output</button>
-          <div class="ai-status" id="aiStatus">Upload a hand image, choose the product and finger, then generate the final output.</div>
+          <button type="button" id="aiGenerateBtn" class="primary">Fit Product</button>
+          <div class="ai-status" id="aiStatus">Upload a hand image, choose the product and finger, then fit the ring.</div>
         </div>
 
         <div class="actions">
           <label class="upload primary" for="fileInput">
-            Upload Finger
+            Upload Hand
             <input id="fileInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp">
           </label>
           <button type="button" id="cameraBtn">Camera</button>
@@ -558,7 +575,7 @@
     </section>
 
     <div class="footer">
-      <span>Geometry metrics guide GPT Image so the ring sits naturally on the selected finger.</span>
+      <span>The hand photo and product image stay unchanged; the app only places the chosen ring visually.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -583,33 +600,32 @@
     const capture = document.getElementById('capture');
     const toast = document.getElementById('toast');
     const variantList = document.getElementById('variantList');
-    const isStaticHostedPage = /\.github\.io$/i.test(location.hostname);
     const ringVariants = {
       gleam: {
-        name: 'Gleam V',
-        description: 'a delicate V-shaped chevron ring with a gold upper band, bright white lower band, and small diamond-like stones',
-        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png',
-        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/nano-product-ring.png',
-        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/ring-marked-clean.png',
-        fitScale: 0.74,
+        name: 'Gleam Play Diamond',
+        price: 'INR 42K',
+        description: 'gold and white diamond V-shaped ring',
+        productSrc: 'assets/products/gleam-play-diamond.png',
+        overlaySrc: 'assets/products/gleam-play-diamond.png',
+        fitScale: 0.92,
         yOffset: 0
       },
-      solitaire: {
-        name: 'Solitaire',
-        description: 'a slim solitaire ring with a small raised stone on a polished band',
-        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
-        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
-        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-solitaire.png',
-        fitScale: 0.78,
+      wave: {
+        name: 'Wave Ring',
+        price: 'INR 10K',
+        description: 'gold wave ring with pearl center',
+        productSrc: 'assets/products/wave-ring.png',
+        overlaySrc: 'assets/products/wave-ring.png',
+        fitScale: 1.08,
         yOffset: 0
       },
-      lattice: {
-        name: 'Lattice',
-        description: 'a polished lattice-style band with small sparkling stones across the front',
-        productSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
-        hostedSrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
-        overlaySrc: 'https://vinitsingh-del.github.io/ring-tryon-tool/assets/mia-gleam-play/mia-ring-lattice.png',
-        fitScale: 0.76,
+      troquise: {
+        name: 'Troquise Queen',
+        price: 'INR 3K',
+        description: 'silver ring with turquoise stone and diamond cluster',
+        productSrc: 'assets/products/troquise-queen.png',
+        overlaySrc: 'assets/products/troquise-queen.png',
+        fitScale: 1,
         yOffset: 0
       }
     };
@@ -688,7 +704,7 @@
         ring.style.display = 'none';
         hint.style.display = 'none';
         stage.dataset.fitTap = '0';
-        setAiStatus(`Choose the finger, then tap Generate Output for ${getSelectedVariant().name}.`);
+        setAiStatus(`Choose the finger, then tap Fit Product for ${getSelectedVariant().name}.`);
         showToast('Photo ready. Choose the ring and finger.');
       };
       finger.onerror = () => {
@@ -713,7 +729,7 @@
       stage.dataset.fitTap = '0';
       ringState = { ...defaultRing };
       applyRing();
-      setAiStatus('Upload a hand image, choose the product and finger, then generate the final output.');
+      setAiStatus('Upload a hand image, choose the product and finger, then fit the ring.');
     }
 
     variantList.addEventListener('click', event => {
@@ -724,19 +740,105 @@
         button.classList.toggle('active', button === card);
       });
       const variant = getSelectedVariant();
-      ringCutout.src = variant.overlaySrc;
+      applySelectedProductCutout();
       aiResultSrc = '';
       aiResult.removeAttribute('src');
       aiResult.style.display = 'none';
       if (activeImageSrc) {
         finger.style.display = 'block';
         ring.style.display = 'none';
-        setAiStatus(`Selected ${variant.name}. Choose the finger, then tap Generate Output.`);
+        setAiStatus(`Selected ${variant.name}. Choose the finger, then tap Fit Product.`);
       } else {
         reference.style.display = 'block';
-        setAiStatus(`Selected ${variant.name}. Upload a hand image, then tap Generate Output.`);
+        setAiStatus(`Selected ${variant.name}. Upload a hand image, then tap Fit Product.`);
       }
     });
+
+    async function applySelectedProductCutout() {
+      const variant = getSelectedVariant();
+      if (!variant.cutoutSrc) {
+        variant.cutoutSrc = await prepareProductCutout(variant.overlaySrc);
+      }
+      ringCutout.src = variant.cutoutSrc;
+    }
+
+    async function prepareProductCutout(src) {
+      const img = await loadDrawable(src);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = image.data;
+      const bg = estimateBackgroundColor(data, canvas.width, canvas.height);
+      let minX = canvas.width;
+      let minY = canvas.height;
+      let maxX = 0;
+      let maxY = 0;
+
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          const i = (y * canvas.width + x) * 4;
+          const dist = colorDistance(data[i], data[i + 1], data[i + 2], bg);
+          const edge = x < 4 || y < 4 || x > canvas.width - 5 || y > canvas.height - 5;
+          const nearBackground = dist < (edge ? 92 : 48);
+          const fadeBackground = dist < 88;
+          if (nearBackground) {
+            data[i + 3] = 0;
+          } else if (fadeBackground) {
+            data[i + 3] = Math.min(data[i + 3], Math.round((dist - 48) / 40 * 255));
+          }
+          if (data[i + 3] > 24) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+
+      ctx.putImageData(image, 0, 0);
+      if (maxX <= minX || maxY <= minY) return src;
+
+      const pad = 8;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(canvas.width - 1, maxX + pad);
+      maxY = Math.min(canvas.height - 1, maxY + pad);
+      const crop = document.createElement('canvas');
+      crop.width = maxX - minX + 1;
+      crop.height = maxY - minY + 1;
+      crop.getContext('2d').drawImage(canvas, minX, minY, crop.width, crop.height, 0, 0, crop.width, crop.height);
+      return crop.toDataURL('image/png');
+    }
+
+    function estimateBackgroundColor(data, width, height) {
+      const samples = [
+        [2, 2],
+        [width - 3, 2],
+        [2, height - 3],
+        [width - 3, height - 3],
+        [Math.round(width / 2), 2],
+        [Math.round(width / 2), height - 3]
+      ];
+      const total = samples.reduce((acc, [x, y]) => {
+        const i = (y * width + x) * 4;
+        acc.r += data[i];
+        acc.g += data[i + 1];
+        acc.b += data[i + 2];
+        return acc;
+      }, { r: 0, g: 0, b: 0 });
+      return {
+        r: total.r / samples.length,
+        g: total.g / samples.length,
+        b: total.b / samples.length
+      };
+    }
+
+    function colorDistance(r, g, b, bg) {
+      return Math.hypot(r - bg.r, g - bg.g, b - bg.b);
+    }
 
     fileInput.addEventListener('change', event => {
       const file = event.target.files && event.target.files[0];
@@ -792,106 +894,41 @@
 
     aiGenerateBtn.addEventListener('click', async () => {
       aiGenerateBtn.disabled = true;
-      aiGenerateBtn.textContent = 'Generating...';
+      aiGenerateBtn.textContent = 'Fitting...';
       stopCamera();
       if (!activeImageSrc) {
-        setAiStatus('Upload a hand image first so GPT Image can generate the final try-on from that hand.');
+        setAiStatus('Upload a hand image first so the product can be fitted onto that hand.');
         showToast('Upload a hand image first.');
         aiGenerateBtn.disabled = false;
-        aiGenerateBtn.textContent = 'Generate Output';
+        aiGenerateBtn.textContent = 'Fit Product';
         return;
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Parsing hand geometry, then asking GPT Image to generate the final output.');
+      setAiStatus('Detecting the finger and fitting the selected product.');
 
-      try {
-        const generated = await generateRingImage();
-        aiResultSrc = generated;
-        aiResult.onload = () => {
-          reference.style.display = 'none';
-          finger.style.display = 'none';
-          ring.style.display = 'none';
-          aiResult.style.display = 'block';
-          hint.style.display = 'none';
-          setAiStatus('GPT Image output ready. Download Preview saves this result.');
-          showToast('Output generated.');
-        };
-        aiResult.src = generated;
-      } catch (error) {
-        console.error(error);
-        showCurrentHandImage();
-        setAiStatus(error.message || 'Could not generate the final output.');
-        showToast(error.message || 'Generation failed.');
-      } finally {
-        aiGenerateBtn.disabled = false;
-        aiGenerateBtn.textContent = 'Generate Output';
-      }
-    });
-
-    async function generateRingImage() {
-      if (isStaticHostedPage && !window.TROOPOD_BACKEND_URL) {
-        throw new Error('Backend URL is not configured for this hosted page.');
-      }
-      const endpoint = (window.TROOPOD_BACKEND_URL || '/api/fit-ring').replace(/\/$/, '');
-      const variant = getSelectedVariant();
-      const handImage = await getHandImageDataUrl();
-      const placementGuide = await getPlacementGuide();
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          finger: fingerSelect.value,
-          handSide: handSelect.value,
-          ringName: variant.name,
-          ringDescription: variant.description,
-          handImage,
-          placementGuide
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `Image backend failed (${response.status}).`);
-      }
-      if (!data.image) throw new Error('Image backend did not return a generated image.');
-      return data.image;
-    }
-
-    async function getHandImageDataUrl() {
-      const img = getCurrentHandImage();
-      if (!img.complete || !img.naturalWidth) return '';
-      const maxSide = 1024;
-      const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', .86);
-    }
-
-    async function getPlacementGuide() {
       try {
         const fit = await generateLandmarkFit();
-        return {
-          available: true,
-          targetFinger: fingerSelect.value,
-          centerStagePercent: {
-            x: Number(fit.xStagePercent.toFixed(2)),
-            y: Number(fit.yStagePercent.toFixed(2))
-          },
-          ringWidthPx: Math.round(fit.widthPx),
-          rotationDeg: Number(fit.rotationDeg.toFixed(1)),
-          instruction: 'Place the ring centered at these coordinates on the selected finger base. Match this rotation and scale. The ring must wrap naturally around the finger with occlusion and contact shadows.'
-        };
-      } catch {
-        return {
-          available: false,
-          targetFinger: fingerSelect.value,
-          instruction: 'No reliable landmarks were detected. Use visual reasoning to place the ring at the base of the selected finger, below the first knuckle, with natural wrap, occlusion, and contact shadow.'
-        };
+        applyLandmarkFit(fit);
+        await applySelectedProductCutout();
+        aiResultSrc = '';
+        showCurrentHandImage();
+        showRing();
+        setAiStatus(`${getSelectedVariant().name} fitted on the selected finger. Download Preview saves this composition.`);
+        showToast('Product fitted.');
+      } catch (error) {
+        console.error(error);
+        applyFallbackFit();
+        await applySelectedProductCutout();
+        showCurrentHandImage();
+        showRing();
+        setAiStatus('Product fitted with fallback placement. Use a clear top-view hand photo for best automatic fit.');
+        showToast('Product fitted.');
+      } finally {
+        aiGenerateBtn.disabled = false;
+        aiGenerateBtn.textContent = 'Fit Product';
       }
-    }
+    });
 
     ring.addEventListener('pointerdown', event => {
       event.preventDefault();
@@ -937,7 +974,7 @@
       stage.dataset.fitTap = '0';
       showCurrentHandImage();
       showRing();
-      setAiStatus('Ring placed at the tapped finger base. Use scale or arrows for final micro-adjustment.');
+      setAiStatus('Ring placed at the tapped finger base. Drag the ring for final micro-adjustment if needed.');
       showToast('Ring placed.');
     }, true);
 
@@ -1142,13 +1179,7 @@
       ctx.drawImage(img, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
     }
 
-    function drawContain(ctx, img, x, y, width, height) {
-      const ratio = Math.min(width / img.naturalWidth, height / img.naturalHeight);
-      const drawWidth = img.naturalWidth * ratio;
-      const drawHeight = img.naturalHeight * ratio;
-      ctx.drawImage(img, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
-    }
-
+    applySelectedProductCutout();
     applyRing();
   </script>
 </body>
