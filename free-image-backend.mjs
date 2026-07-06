@@ -86,19 +86,20 @@ function buildTryOnPrompt(payload) {
   const placementGuide = payload.placementGuide
     ? `Deterministic geometry guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Follow this placement guide closely when positioning the ring.`
     : 'Infer the selected finger base visually from the uploaded hand image.';
+  const draftInstruction = payload.draftImage
+    ? 'The first image already contains a rough 2D overlay of the selected ring at the intended scale, rotation, and position. Do not move, resize, redesign, or replace that ring. Blend and photorealistically finish this ring composite only: refine shadows, highlights, reflections, and finger occlusion.'
+    : 'Use the product reference image to add the ring at the guided placement.';
 
   return [
-    'Edit the first uploaded image, which is the user hand photo, into a realistic jewelry virtual try-on image.',
-    'Use the second uploaded image as the exact ring product reference. The visible ring in the output must match this product image as closely as possible: same silhouette, stone shape, metal color, gemstone color, and distinctive details.',
-    'The mask marks the only area that may change. Outside the transparent mask area, preserve the uploaded hand photo as unchanged as possible.',
-    'Do not alter the hand shape, hand size, skin tone, nails, wrist, background, camera angle, or lighting outside the masked ring-placement zone.',
-    'Inside the masked area, edit only what is necessary for the ring to sit naturally on the finger with realistic contact, occlusion, shine, and shadow.',
-    `Place the exact selected product, ${ringName}, on the ${finger}. Product description: ${ringDescription}.`,
+    'Use the OpenAI Images edit behavior: edit the uploaded hand image only within the transparent mask area.',
+    'Outside the mask, keep the user hand photo pixel-identical as much as possible. Do not regenerate skin tone, lighting, background, nails, wrist, hand pose, or unmasked fingers.',
+    'Use the selected catalog ring image as the exact visual reference. Do not imagine a generic ring.',
+    `Add this exact ring design (${ringDescription}) onto the ${finger}, matching the reference ring's real proportions, band width, stone or setting type, metal color, stone placement, and style.`,
+    draftInstruction,
     handPose,
     placementGuide,
+    'Wrap the band naturally around the finger following its curvature. Add realistic contact shadow underneath the band and a soft specular highlight consistent with the existing light source.',
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
-    'Use realistic scale, finger occlusion, contact shadows, metal highlights, sparkle, shine, and perspective.',
-    'For ring finger placement, put the ring at the base of the proximal phalanx, below the first knuckle and just above the palm webbing.',
     'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
@@ -122,7 +123,7 @@ async function callOpenAIImageGeneration(payload) {
   }
 
   const prompt = buildTryOnPrompt(payload);
-  const sourceImage = imageFromDataUrl(payload.handImage, 'hand');
+  const sourceImage = imageFromDataUrl(payload.draftImage || payload.handImage, payload.draftImage ? 'draft-ring-overlay' : 'hand');
   if (!sourceImage) {
     throw new Error('Upload a hand image before generating the try-on output.');
   }
@@ -179,6 +180,7 @@ async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, si
   form.append('size', OPENAI_IMAGE_SIZE);
   form.append('quality', OPENAI_IMAGE_QUALITY);
   form.append('output_format', OPENAI_IMAGE_FORMAT);
+  form.append('input_fidelity', 'high');
 
   return fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',

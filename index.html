@@ -974,6 +974,7 @@
       const ringImage = await getProductImageDataUrl(variant.productSrc);
       const placementGuide = createPlacementGuideFromFit(fit, handPayload);
       const maskImage = createEditMaskDataUrl(handPayload.width, handPayload.height, placementGuide);
+      const draftImage = await createDraftCompositeDataUrl(handPayload, placementGuide);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -986,6 +987,7 @@
           handImage: handPayload.dataUrl,
           ringImage,
           maskImage,
+          draftImage,
           placementGuide
         })
       });
@@ -1028,7 +1030,7 @@
         ringWidthImagePercent: Number(ringWidthImagePercent.toFixed(2)),
         outputSize: { width: handPayload.width, height: handPayload.height },
         rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
-        instruction: 'Generate only the local try-on effect within the transparent mask. The final app will restore the original hand and overlay the exact ring product image.'
+        instruction: 'Blend and photorealistically finish the rough ring overlay within the transparent finger-segment mask. Do not move or resize the ring. Preserve everything outside the mask.'
       };
     }
 
@@ -1040,19 +1042,88 @@
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
-      const cx = clampNumber(center.x, 4, 96) / 100 * canvas.width;
-      const cy = clampNumber(center.y, 4, 96) / 100 * canvas.height;
-      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
-      const radiusX = Math.max(56, canvas.width * ringPercent * 1.7);
-      const radiusY = Math.max(42, radiusX * .68);
+      const segment = getFingerSegmentMaskGeometry(canvas.width, canvas.height, placementGuide);
 
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, radiusX, radiusY, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawRoundedCapsule(ctx, segment);
       ctx.globalCompositeOperation = 'source-over';
       return canvas.toDataURL('image/png');
+    }
+
+    async function createDraftCompositeDataUrl(handPayload, placementGuide) {
+      const base = await loadDrawable(handPayload.dataUrl);
+      const ringImg = await loadDrawable(ringCutout.src);
+      const canvas = document.createElement('canvas');
+      canvas.width = handPayload.width;
+      canvas.height = handPayload.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+
+      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
+      const x = clampNumber(center.x, 0, 100) / 100 * canvas.width;
+      const y = clampNumber(center.y, 0, 100) / 100 * canvas.height;
+      const width = clampNumber(placementGuide.ringWidthImagePercent || 12, 3, 35) / 100 * canvas.width;
+      const height = width * (ringImg.naturalHeight / ringImg.naturalWidth);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((placementGuide.rotationDeg || 0) * Math.PI / 180);
+      ctx.save();
+      ctx.translate(0, height * .23);
+      ctx.scale(1, .34);
+      const shadowGradient = ctx.createRadialGradient(0, 0, width * .08, 0, 0, width * .42);
+      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .26)');
+      shadowGradient.addColorStop(.55, 'rgba(48, 28, 20, .12)');
+      shadowGradient.addColorStop(1, 'rgba(48, 28, 20, 0)');
+      ctx.fillStyle = shadowGradient;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, width * .44, height * .52, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
+      ctx.restore();
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function getFingerSegmentMaskGeometry(width, height, placementGuide) {
+      const center = placementGuide.centerImagePercent || { x: 50, y: 50 };
+      const cx = clampNumber(center.x, 4, 96) / 100 * width;
+      const cy = clampNumber(center.y, 4, 96) / 100 * height;
+      const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
+      const fingerWidth = Math.max(42, width * ringPercent * .95);
+      const segmentLength = Math.max(fingerWidth * 2.7, 96);
+      const fingerAngle = ((placementGuide.rotationDeg || 0) - 90) * Math.PI / 180;
+      return {
+        x: cx,
+        y: cy,
+        width: fingerWidth * 1.55,
+        height: segmentLength,
+        radius: fingerWidth * .78,
+        angle: fingerAngle
+      };
+    }
+
+    function drawRoundedCapsule(ctx, geometry) {
+      const halfW = geometry.width / 2;
+      const halfH = geometry.height / 2;
+      const radius = Math.min(geometry.radius, halfW, halfH);
+      ctx.save();
+      ctx.translate(geometry.x, geometry.y);
+      ctx.rotate(geometry.angle);
+      ctx.beginPath();
+      ctx.moveTo(-halfW + radius, -halfH);
+      ctx.lineTo(halfW - radius, -halfH);
+      ctx.quadraticCurveTo(halfW, -halfH, halfW, -halfH + radius);
+      ctx.lineTo(halfW, halfH - radius);
+      ctx.quadraticCurveTo(halfW, halfH, halfW - radius, halfH);
+      ctx.lineTo(-halfW + radius, halfH);
+      ctx.quadraticCurveTo(-halfW, halfH, -halfW, halfH - radius);
+      ctx.lineTo(-halfW, -halfH + radius);
+      ctx.quadraticCurveTo(-halfW, -halfH, -halfW + radius, -halfH);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     async function generateGptPlacementFit() {
