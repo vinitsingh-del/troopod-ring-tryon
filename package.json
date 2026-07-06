@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node free-image-backend.mjs",
-    "health": "node -e \"fetch('http://127.0.0.1:8787/health').then(r=>r.json()).then(console.log)\""
+    "health": "node -e \"fetch('http://127.0.0.1:8787/health').then(r=>r.json()).then(console.log)\"",
+    "test": "node scripts/regression-ring-fit.mjs"
   }
 }

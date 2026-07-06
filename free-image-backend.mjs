@@ -98,7 +98,8 @@ function buildTryOnPrompt(payload) {
     draftInstruction,
     handPose,
     placementGuide,
-    'Wrap the band naturally around the finger following its curvature. Add realistic contact shadow underneath the band and a soft specular highlight consistent with the existing light source.',
+    'Blend this ring naturally onto the finger. Add a soft contact shadow directly beneath the band where it meets the skin, add a subtle specular highlight on the top curve of the band matching the photo light direction, and slightly darken the underside of the band.',
+    'Do not move, resize, rotate, redesign, or replace the ring from the rough overlay. Only refine shading, shadow, reflection, and tiny occlusion details.',
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
     'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'

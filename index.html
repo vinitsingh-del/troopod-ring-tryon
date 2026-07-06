@@ -1028,6 +1028,10 @@
         targetFinger: fingerSelect.value,
         centerImagePercent: { x: Number(xImagePercent.toFixed(2)), y: Number(yImagePercent.toFixed(2)) },
         ringWidthImagePercent: Number(ringWidthImagePercent.toFixed(2)),
+        fingerWidthImagePercent: Number((((fit.fingerWidthPx || fit.widthPx * .72 || ringState.size * .72) / imageRect.width) * 100).toFixed(2)),
+        perspectiveY: Number((fit.perspectiveY || .86).toFixed(2)),
+        farSideSqueeze: Number((fit.farSideSqueeze || .9).toFixed(2)),
+        edgeOpacity: Number((fit.edgeOpacity || .88).toFixed(2)),
         outputSize: { width: handPayload.width, height: handPayload.height },
         rotationDeg: Number((fit.rotationDeg || ringState.rotation || 0).toFixed(1)),
         instruction: 'Blend and photorealistically finish the rough ring overlay within the transparent finger-segment mask. Do not move or resize the ring. Preserve everything outside the mask.'
@@ -1063,24 +1067,24 @@
       const x = clampNumber(center.x, 0, 100) / 100 * canvas.width;
       const y = clampNumber(center.y, 0, 100) / 100 * canvas.height;
       const width = clampNumber(placementGuide.ringWidthImagePercent || 12, 3, 35) / 100 * canvas.width;
-      const height = width * (ringImg.naturalHeight / ringImg.naturalWidth);
+      const height = width * (ringImg.naturalHeight / ringImg.naturalWidth) * clampNumber(placementGuide.perspectiveY || .86, .68, 1);
 
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate((placementGuide.rotationDeg || 0) * Math.PI / 180);
       ctx.save();
-      ctx.translate(0, height * .23);
-      ctx.scale(1, .34);
+      ctx.translate(0, height * .2);
+      ctx.scale(1, .32);
       const shadowGradient = ctx.createRadialGradient(0, 0, width * .08, 0, 0, width * .42);
-      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .26)');
-      shadowGradient.addColorStop(.55, 'rgba(48, 28, 20, .12)');
+      shadowGradient.addColorStop(0, 'rgba(48, 28, 20, .34)');
+      shadowGradient.addColorStop(.58, 'rgba(48, 28, 20, .16)');
       shadowGradient.addColorStop(1, 'rgba(48, 28, 20, 0)');
       ctx.fillStyle = shadowGradient;
       ctx.beginPath();
-      ctx.ellipse(0, 0, width * .44, height * .52, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, width * .42, height * .5, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
+      drawWrappedRingSprite(ctx, ringImg, width, height, placementGuide);
       ctx.restore();
 
       return canvas.toDataURL('image/png');
@@ -1091,17 +1095,62 @@
       const cx = clampNumber(center.x, 4, 96) / 100 * width;
       const cy = clampNumber(center.y, 4, 96) / 100 * height;
       const ringPercent = clampNumber(placementGuide.ringWidthImagePercent || 12, 5, 24) / 100;
-      const fingerWidth = Math.max(42, width * ringPercent * .95);
-      const segmentLength = Math.max(fingerWidth * 2.7, 96);
+      const fingerPercent = clampNumber(placementGuide.fingerWidthImagePercent || ringPercent * .72 * 100, 4, 22) / 100;
+      const fingerWidth = Math.max(42, width * fingerPercent);
+      const segmentLength = Math.max(fingerWidth * 2.15, 88);
       const fingerAngle = ((placementGuide.rotationDeg || 0) - 90) * Math.PI / 180;
       return {
         x: cx,
         y: cy,
-        width: fingerWidth * 1.55,
+        width: fingerWidth * 1.38,
         height: segmentLength,
-        radius: fingerWidth * .78,
+        radius: fingerWidth * .69,
         angle: fingerAngle
       };
+    }
+
+    function drawWrappedRingSprite(ctx, ringImg, width, height, placementGuide) {
+      const farSide = ((placementGuide.centerImagePercent?.x || 50) > 50) ? 'right' : 'left';
+      const squeeze = clampNumber(placementGuide.farSideSqueeze || .9, .84, .96);
+      const edgeAlpha = clampNumber(placementGuide.edgeOpacity || .88, .82, .94);
+      const halfSource = ringImg.naturalWidth / 2;
+      const halfWidth = width / 2;
+
+      ctx.save();
+      ctx.globalAlpha = edgeAlpha;
+      if (farSide === 'left') {
+        ctx.drawImage(ringImg, 0, 0, halfSource, ringImg.naturalHeight, -halfWidth * squeeze, -height / 2, halfWidth * squeeze, height);
+      } else {
+        ctx.drawImage(ringImg, halfSource, 0, halfSource, ringImg.naturalHeight, 0, -height / 2, halfWidth * squeeze, height);
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.beginPath();
+      if (farSide === 'left') {
+        ctx.rect(-halfWidth * .05, -height / 2, halfWidth * 1.05, height);
+        ctx.clip();
+        ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
+      } else {
+        ctx.rect(-halfWidth, -height / 2, halfWidth * 1.05, height);
+        ctx.clip();
+        ctx.drawImage(ringImg, -width / 2, -height / 2, width, height);
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = .45;
+      const highlight = ctx.createLinearGradient(-width * .28, -height * .2, width * .28, -height * .4);
+      highlight.addColorStop(0, 'rgba(255,255,255,0)');
+      highlight.addColorStop(.48, 'rgba(255,255,255,.72)');
+      highlight.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = highlight;
+      ctx.lineWidth = Math.max(1.4, width * .018);
+      ctx.beginPath();
+      ctx.ellipse(0, -height * .18, width * .33, height * .12, 0, Math.PI * .08, Math.PI * .92);
+      ctx.stroke();
+      ctx.restore();
     }
 
     function drawRoundedCapsule(ctx, geometry) {
@@ -1346,7 +1395,7 @@
       const mcpPx = toImagePoint(mcp, imageRect);
       const pipPx = toImagePoint(pip, imageRect);
       const neighborPx = toImagePoint(neighbor, imageRect);
-      const t = fingerSelect.value === 'thumb' ? 0.58 : 0.3;
+      const t = fingerSelect.value === 'thumb' ? 0.5 : 0.18;
       const centerPx = {
         x: mcpPx.x + (pipPx.x - mcpPx.x) * t,
         y: mcpPx.y + (pipPx.y - mcpPx.y) * t
@@ -1354,9 +1403,11 @@
       const fingerLength = distance(mcpPx, pipPx);
       const baseSpacing = distance(mcpPx, neighborPx);
       const selected = getSelectedVariant();
-      const width = clampNumber(Math.max(fingerLength * 0.58, baseSpacing * 0.58), 34, 92) * (selected.fitScale || 1);
+      const localFingerWidth = clampNumber(Math.max(fingerLength * 0.32, baseSpacing * 0.46), 28, 96);
+      const width = clampNumber(localFingerWidth * 1.38, 34, 130) * (selected.fitScale || 1);
       const fingerAngle = Math.atan2(pipPx.y - mcpPx.y, pipPx.x - mcpPx.x) * 180 / Math.PI;
       const rotation = normalizeAngle(fingerAngle + 90);
+      const depthTilt = clampNumber(1 - Math.abs(pip.z - mcp.z) * 1.4, .72, .96);
 
       return {
         xStagePercent: centerPx.x / imageRect.stageWidth * 100,
@@ -1364,6 +1415,10 @@
         xImagePercent: (centerPx.x - imageRect.left) / imageRect.width * 100,
         yImagePercent: (centerPx.y - imageRect.top) / imageRect.height * 100,
         widthImagePercent: width / imageRect.width * 100,
+        fingerWidthPx: localFingerWidth,
+        perspectiveY: depthTilt,
+        farSideSqueeze: .9,
+        edgeOpacity: .88,
         widthPx: width,
         rotationDeg: rotation,
         note: 'Ring fitted to detected finger landmarks.'
