@@ -25,9 +25,11 @@ assert(html.includes('Use GPT Image edit to generate the selected product ring d
 assert(!html.includes('draftImage,'), 'Frontend should not send a rough ring overlay as the edit base.');
 assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve backend endpoints for hosted and local pages.');
 assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
+assert(html.indexOf('fit = await generateLandmarkFit()') < html.indexOf('fit = await generateGptPlacementFit()'), 'Frontend must use hand landmarks before GPT placement fallback.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
 assert(backend.includes("imageFromDataUrl(payload.handImage, 'hand')"), 'Images edit must use the original hand as the base image.');
 assert(backend.includes('Generate the ring placement yourself'), 'Backend prompt must let GPT place the ring inside the protected mask.');
+assert(backend.includes('Do not place the ring on the thumb, palm, webbing'), 'Backend prompt must prevent wrong-finger placement.');
 
 const before = dimensions(beforePath);
 const after = dimensions(afterPath);

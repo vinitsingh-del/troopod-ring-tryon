@@ -905,16 +905,16 @@
       }
       ring.style.display = 'none';
       showCurrentHandImage();
-      setAiStatus('Asking TROOLLM Image to generate the ring on the selected finger while keeping the guarded hand photo intact.');
+      setAiStatus('Detecting the selected finger first, then asking TROOLLM Image to generate the ring only in that area.');
 
       try {
         let fit;
         try {
-          fit = await generateGptPlacementFit();
-        } catch (gptError) {
-          console.warn(gptError);
-          setAiStatus('TROOLLM placement was unavailable, using local hand detection instead.');
           fit = await generateLandmarkFit();
+        } catch (landmarkError) {
+          console.warn(landmarkError);
+          setAiStatus('Hand detection was unavailable, asking TROOLLM for the selected finger location.');
+          fit = await generateGptPlacementFit();
         }
         applyLandmarkFit(fit);
         await applySelectedProductCutout();

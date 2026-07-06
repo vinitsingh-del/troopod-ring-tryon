@@ -86,12 +86,14 @@ function buildTryOnPrompt(payload) {
   const placementGuide = payload.placementGuide
     ? `Finger placement guide from the hand parser: ${JSON.stringify(payload.placementGuide)}. Use this only to identify the correct finger base and approximate scale. You may adjust the ring within the transparent mask so it sits naturally.`
     : 'Infer the selected finger base visually from the uploaded hand image.';
+  const targetFingerRule = describeTargetFinger(finger);
 
   return [
     'Use the OpenAI Images edit behavior: edit the uploaded hand image only within the transparent mask area.',
     'Outside the mask, keep the user hand photo pixel-identical as much as possible. Do not regenerate skin tone, lighting, background, nails, wrist, hand pose, or unmasked fingers.',
     'Use the selected catalog ring image as the exact visual reference. Do not imagine a generic ring.',
     `Add this exact ring design (${ringDescription}) onto the ${finger}, matching the reference ring's real proportions, band width, stone or setting type, metal color, stone placement, and style.`,
+    targetFingerRule,
     'Generate the ring placement yourself inside the transparent finger-base edit area. The ring should wrap around the finger and sit just above the knuckle bulge at the base of the selected finger.',
     handPose,
     placementGuide,
@@ -102,6 +104,17 @@ function buildTryOnPrompt(payload) {
     'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
   ].join(' ');
+}
+
+function describeTargetFinger(finger) {
+  const rules = {
+    'ring finger': 'Target only the ring finger: the fourth finger, between the middle finger and little finger. Do not place the ring on the thumb, palm, webbing, index finger, or wrist.',
+    'index finger': 'Target only the index finger: the finger next to the thumb. Do not place the ring on the thumb, palm, webbing, middle finger, or wrist.',
+    'middle finger': 'Target only the middle finger: the central longest finger. Do not place the ring on the thumb, palm, webbing, index finger, ring finger, or wrist.',
+    'little finger': 'Target only the little finger: the smallest outer finger. Do not place the ring on the thumb, palm, webbing, ring finger, or wrist.',
+    thumb: 'Target only the thumb. Do not place the ring on the palm, webbing, wrist, or other fingers.'
+  };
+  return rules[finger] || rules['ring finger'];
 }
 
 function imageFromDataUrl(dataUrl, fallbackName = 'image') {
