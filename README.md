@@ -1,6 +1,6 @@
 # TrooPod Ring Try-On
 
-GPT-protected jewelry virtual try-on prototype for placing a selected catalog ring image onto an uploaded hand photo without allowing the final hand or product pixels to be overwritten.
+GPT Image jewelry virtual try-on prototype for generating a final hand photo with the selected catalog ring placed on the selected finger.
 
 ## Run Locally
 
@@ -10,16 +10,16 @@ npm start
 
 Then open `http://127.0.0.1:8787`.
 
-## GPT-Protected Exact Try-On
+## GPT Image Try-On
 
-The app uses GPT Image for a local try-on pass, then protects the final pixels in the browser:
+The app uses GPT Image for the final try-on output:
 
 - Upload a hand photo.
 - Choose Gleam Play Diamond, Wave Ring, or Troquise Queen.
 - Pick the target finger.
-- Click `Fit Product`; GPT analyzes placement and generates the local try-on effect.
-- Canvas restores the uploaded hand as the base and overlays the exact selected product image.
+- Click `Fit Product`; GPT receives the hand photo, selected product image, target finger, placement guide, and guarded edit mask.
+- GPT generates the final image with the ring worn on the selected finger.
 
 ## Notes
 
-GPT Image can reinterpret photos, so the app does a final protection pass. The final hand base comes from the original upload, and the visible ring comes from the selected product image.
+The guarded edit mask is kept tight around the ring placement area so GPT focuses on seating the ring while preserving the rest of the uploaded hand photo.

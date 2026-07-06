@@ -89,16 +89,15 @@ function buildTryOnPrompt(payload) {
 
   return [
     'Edit the first uploaded image, which is the user hand photo, into a realistic jewelry virtual try-on image.',
-    'Use the second uploaded image only as the exact ring product reference.',
-    'The mask marks the only area that may change. Outside the transparent mask area, preserve the uploaded hand photo pixel-for-pixel as much as the image edit API allows.',
-    'Do not redraw the hand, nails, wrist, jewelry already on the hand, background, camera angle, or lighting outside the masked ring placement area.',
-    'Inside the masked area, make the smallest possible realistic edit needed to seat the ring naturally on the finger.',
+    'Use the second uploaded image as the exact ring product reference. The visible ring in the output must match this product image as closely as possible: same silhouette, stone shape, metal color, gemstone color, and distinctive details.',
+    'The mask marks the only area that may change. Outside the transparent mask area, preserve the uploaded hand photo as unchanged as possible.',
+    'Do not alter the hand shape, hand size, skin tone, nails, wrist, background, camera angle, or lighting outside the masked ring-placement zone.',
+    'Inside the masked area, edit only what is necessary for the ring to sit naturally on the finger with realistic contact, occlusion, shine, and shadow.',
     `Place the exact selected product, ${ringName}, on the ${finger}. Product description: ${ringDescription}.`,
     handPose,
     placementGuide,
     'The ring must sit neatly and naturally on the finger, physically worn around it, not floating and not pasted on top.',
-    'Keep the product design faithful to the ring reference: same metal color, stone color, silhouette, and distinctive details.',
-    'Use realistic scale, finger occlusion, contact shadows, metal highlights, sparkle, and perspective.',
+    'Use realistic scale, finger occlusion, contact shadows, metal highlights, sparkle, shine, and perspective.',
     'For ring finger placement, put the ring at the base of the proximal phalanx, below the first knuckle and just above the palm webbing.',
     'Return one final photorealistic try-on photo only.',
     'Do not add text, UI elements, labels, watermarks, logos, collage borders, or a standalone product shot.'
