@@ -44,6 +44,8 @@ assert(backend.includes('function statusForError'), 'Backend must classify provi
 assert(backend.includes('return 402'), 'Backend must return 402 for billing/quota failures.');
 assert(html.includes('OpenAI billing limit reached'), 'Frontend must show billing-limit failures clearly.');
 assert(html.includes('Billing limit reached.'), 'Frontend toast must show billing-limit failures clearly.');
+assert(html.includes('TROOLLM backend is not reachable'), 'Frontend must explain when the local backend is not running.');
+assert(html.includes('Start local backend first.'), 'Frontend toast must explain backend connection failures.');
 assert(backend.includes('slim worn chevron band'), 'Backend prompt should keep the ring small and neatly worn.');
 assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
 assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');

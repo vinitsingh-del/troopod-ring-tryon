@@ -924,10 +924,13 @@
         console.error(error);
         showCurrentHandImage();
         const billingIssue = /billing|hard limit|quota|credits|insufficient/i.test(error.message || '');
+        const connectionIssue = /failed to fetch|networkerror|load failed/i.test(error.message || '');
         setAiStatus(billingIssue
           ? 'OpenAI billing limit reached. Add credits or raise the project limit, then try Fit Product again.'
-          : (error.message || 'TROOLLM Image could not generate the try-on output.'));
-        showToast(billingIssue ? 'Billing limit reached.' : 'TROOLLM generation failed.');
+          : connectionIssue
+            ? 'TROOLLM backend is not reachable. Start the local backend at http://127.0.0.1:8787, then try Fit Product again.'
+            : (error.message || 'TROOLLM Image could not generate the try-on output.'));
+        showToast(billingIssue ? 'Billing limit reached.' : connectionIssue ? 'Start local backend first.' : 'TROOLLM generation failed.');
       } finally {
         aiGenerateBtn.disabled = false;
         aiGenerateBtn.textContent = 'Fit Product';
@@ -940,20 +943,25 @@
       const handPayload = await getHandImagePayload();
       const ringImage = await getProductImageDataUrl(variant.productSrc);
       const maskImage = createSimpleRingMaskDataUrl(handPayload.width, handPayload.height);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          finger: fingerSelect.value,
-          handSide: handSelect.value,
-          ringName: variant.name,
-          ringPrice: variant.price,
-          ringDescription: variant.description,
-          handImage: handPayload.dataUrl,
-          ringImage,
-          maskImage
-        })
-      });
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            finger: fingerSelect.value,
+            handSide: handSelect.value,
+            ringName: variant.name,
+            ringPrice: variant.price,
+            ringDescription: variant.description,
+            handImage: handPayload.dataUrl,
+            ringImage,
+            maskImage
+          })
+        });
+      } catch (error) {
+        throw new Error(`Failed to fetch TROOLLM backend at ${endpoint}.`);
+      }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || `TROOLLM Image generation failed (${response.status}).`);
