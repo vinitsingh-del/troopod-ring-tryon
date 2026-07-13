@@ -3,6 +3,13 @@ import { execFileSync } from 'node:child_process';
 
 const beforePath = 'test/fixtures/reference-pair/before.png';
 const afterPath = 'test/fixtures/reference-pair/after.png';
+const productPaths = [
+  'assets/products/gleam-play-diamond.png',
+  'assets/products/wave-ring.png',
+  'assets/products/troquise-queen.png',
+  'assets/products/emerald-cushion-ring.png',
+  'assets/products/diamond-bloom-ring.png'
+];
 const html = readFileSync('index.html', 'utf8');
 const backend = readFileSync('free-image-backend.mjs', 'utf8');
 
@@ -20,6 +27,14 @@ function assert(condition, message) {
 
 assert(existsSync(beforePath), 'Missing reference before image.');
 assert(existsSync(afterPath), 'Missing reference after image.');
+for (const productPath of productPaths) {
+  assert(existsSync(productPath), `Missing product image: ${productPath}`);
+  assert(html.includes(productPath), `Frontend must reference product image: ${productPath}`);
+}
+assert(html.includes('Emerald Cushion Ring'), 'Frontend must include the Emerald Cushion Ring model.');
+assert(html.includes('Diamond Bloom Ring'), 'Frontend must include the Diamond Bloom Ring model.');
+assert(html.includes('INR 18K'), 'Frontend must include the Emerald Cushion Ring price.');
+assert(html.includes('INR 32K'), 'Frontend must include the Diamond Bloom Ring price.');
 assert(html.includes('createSimpleRingMaskDataUrl'), 'Frontend must create the simple GPT edit mask.');
 assert(html.includes('const maskImage = createSimpleRingMaskDataUrl'), 'Frontend must use the simple mask for GPT generation.');
 assert(!html.includes('generateLandmarkFit'), 'Frontend should not use hand landmark logic.');
