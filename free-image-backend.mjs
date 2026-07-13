@@ -7,7 +7,7 @@ const WORKSPACE = resolve(process.cwd());
 const ENV_PATH = resolve(WORKSPACE, '.env.local');
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
-const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
 
@@ -86,6 +86,10 @@ function buildTryOnPrompt(payload) {
   const handSide = payload.handSide || 'auto-detect';
   const ringName = payload.ringName || 'selected MIA ring';
   const ringDescription = payload.ringDescription || ringName;
+  const placement = payload.placement || {};
+  const placementGuide = Number.isFinite(placement.xImagePercent) && Number.isFinite(placement.yImagePercent)
+    ? `Use the mask center as the final ring center. Placement geometry from the analysis pass: center ${placement.xImagePercent.toFixed(1)}% x, ${placement.yImagePercent.toFixed(1)}% y, ring visual width ${Number(placement.ringWidthImagePercent || 10).toFixed(1)}% of image width, rotation ${Number(placement.rotationDeg || 0).toFixed(1)} degrees. Do not drift from this center, selected finger, size, or rotation.`
+    : 'Use the transparent mask center as the final ring center. Do not drift away from the masked ring-wearing zone.';
 
   return [
     'You are an advanced, low-latency AI Image Creation and Editing Engine performing a realistic jewelry virtual try-on edit.',
@@ -112,6 +116,9 @@ function buildTryOnPrompt(payload) {
     '- Do not create a new ring style.',
     '- Do not change the product design, metal color, gemstone placement, stone color, bead detailing, pavé line, or shape.',
     '- Never replace the product with a similar-looking ring. Use the exact uploaded product reference.',
+    '- The visible ring face must match the uploaded product reference, including gemstone outline, prongs, cluster layout, band split, pavé details, and metal thickness.',
+    '- Do not simplify a gemstone ring into a generic stone-and-band icon. Preserve the SKU-specific construction even after perspective fitting.',
+    '- Only adapt scale, rotation, perspective, shadow, and wrap needed to make the same product look worn on the finger.',
     '- The ring must look physically worn on the finger, not pasted on top.',
     '- The ring must wrap around the finger naturally with correct curvature.',
     '- The ring must be centered on the selected finger.',
@@ -127,6 +134,8 @@ function buildTryOnPrompt(payload) {
     'PLACEMENT:',
     `Selected finger: ${finger}`,
     `Hand side: ${handSide}`,
+    getFingerDefinition(finger),
+    placementGuide,
     'Ring position: place the ring at the natural ring-wearing area between the lower finger joint and the base of the finger.',
     'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
     '',
@@ -136,6 +145,18 @@ function buildTryOnPrompt(payload) {
     'NEGATIVE INSTRUCTIONS:',
     'No floating ring. No flat sticker look. No oversized product. No melted jewelry. No duplicate rings. No extra gemstones. No changed hand. No changed nails. No changed skin texture. No full image regeneration. No altered logos. No random text. No borders. No collages. No watermarks. No incorrect product colors.'
   ].join(' ');
+}
+
+function getFingerDefinition(finger) {
+  const imageOrderRule = 'Image-space finger order rule: if the thumb appears on the right side of the image, the visible finger order from left to right is little, ring, middle, index, thumb. If the thumb appears on the left side of the image, the visible finger order from left to right is thumb, index, middle, ring, little. Use this image-space order before choosing the selected finger.';
+  const definitions = {
+    thumb: 'Finger definition: thumb is the short outer finger at the side of the hand.',
+    'index finger': 'Finger definition: index finger is directly next to the thumb, also called the pointer finger.',
+    'middle finger': 'Finger definition: middle finger is the longest central finger.',
+    'ring finger': 'Finger definition: ring finger is the fourth finger from the thumb and the second finger from the little finger.',
+    'little finger': 'Finger definition: little finger is the smallest outer finger opposite the thumb.'
+  };
+  return `${imageOrderRule} ${definitions[finger] || definitions['ring finger']}`;
 }
 
 function imageFromDataUrl(dataUrl, fallbackName = 'image') {
@@ -165,6 +186,9 @@ async function callOpenAIImageGeneration(payload) {
     throw new Error('Choose a ring product before generating the try-on output.');
   }
   const maskImage = imageFromDataUrl(payload.maskImage, 'ring-edit-mask');
+  if (!maskImage) {
+    throw new Error('A precise finger placement mask is required before generating the try-on output.');
+  }
 
   const sourceImages = [sourceImage, ringImage];
   let lastError;
@@ -245,17 +269,27 @@ async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, si
 }
 
 function buildPlacementPrompt(payload) {
+  const finger = payload.finger || 'ring finger';
+  const ringName = payload.ringName || 'selected ring';
+  const ringDescription = payload.ringDescription || 'catalog ring';
   return [
-    'You are a virtual jewelry try-on placement engine.',
-    'Analyze the first image as the user hand photo and the second image as the exact selected ring product.',
-    'Return only placement geometry. Do not generate or edit any image.',
-    `Target finger: ${payload.finger || 'ring finger'}.`,
+    'You are a precise virtual jewelry try-on placement engine.',
+    'Analyze the first image as the authoritative user hand photo and the second image as the exact selected ring product.',
+    'Return only placement geometry. Do not generate, edit, or describe any image.',
+    `Target finger: ${finger}.`,
+    getFingerDefinition(finger),
     `Hand side hint: ${payload.handSide || 'auto-detect'}.`,
-    `Ring product: ${payload.ringName || 'selected ring'} (${payload.ringDescription || 'catalog ring'}).`,
-    'Choose the center point where the ring should sit naturally at the base of the selected finger.',
-    'Estimate the ring width as a percent of the hand image width so the ring fits snugly around the finger.',
+    `Ring product: ${ringName} (${ringDescription}).`,
+    'Finger naming rule: identify the thumb position in the image first, then apply the image-space order rule exactly. Never confuse index, middle, ring, and little fingers.',
+    'Coordinate guardrail: when thumb is on the right side of the image, the ring finger center is normally left of the middle finger and should usually be around x=34-48%, middle around x=46-60%, index around x=58-74%.',
+    'Coordinate guardrail: when thumb is on the left side of the image, index is usually around x=26-42%, middle around x=40-55%, ring around x=52-68%, little around x=64-82%.',
+    'If your selected finger name and x coordinate disagree, correct the x coordinate before returning JSON.',
+    'Choose the center point where the ring should sit naturally on the selected finger at the ring-wearing zone, between the MCP/base knuckle and lower finger joint.',
+    'Place the center on the selected finger only, not between fingers, not on the knuckle crease, not on the palm, and not on an adjacent finger.',
+    'Estimate the visible ring width as a percent of the hand image width so the ring fits snugly around that finger. Use a conservative jewelry scale.',
     'Estimate the rotation in degrees so the ring is perpendicular to the selected finger direction.',
-    'The final renderer will place the original product image directly on the original hand photo, so be precise and conservative.'
+    'The next step will create a tight transparent edit mask from your geometry, so be precise and conservative.',
+    'If the requested finger is visible, confidence must reflect how certain the selected finger and exact ring-wearing zone are.'
   ].join('\n');
 }
 

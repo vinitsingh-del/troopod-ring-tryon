@@ -978,7 +978,8 @@
       const handPayload = await getHandImagePayload();
       setProgressStage('Reading reference');
       const ringImage = await getProductImageDataUrl(variant.productSrc);
-      const maskImage = createSimpleRingMaskDataUrl(handPayload.width, handPayload.height);
+      const placement = await getGptFingerPlacement(handPayload.dataUrl, ringImage, variant);
+      const maskImage = createPlacementRingMaskDataUrl(handPayload.width, handPayload.height, placement);
       setProgressStage('Creating image');
       let response;
       try {
@@ -993,7 +994,8 @@
             ringDescription: variant.description,
             handImage: handPayload.dataUrl,
             ringImage,
-            maskImage
+            maskImage,
+            placement
           })
         });
       } catch (error) {
@@ -1005,6 +1007,37 @@
       }
       if (!data.image) throw new Error('TROOLLM Image did not return a try-on image.');
       return data.image;
+    }
+
+    async function getGptFingerPlacement(handImage, ringImage, variant) {
+      const endpoint = getBackendEndpoint('/api/place-ring');
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            finger: fingerSelect.value,
+            handSide: handSelect.value,
+            ringName: variant.name,
+            ringPrice: variant.price,
+            ringDescription: variant.description,
+            handImage,
+            ringImage
+          })
+        });
+      } catch (error) {
+        throw new Error(`Failed to fetch TROOLLM placement engine at ${endpoint}.`);
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `TROOLLM placement failed (${response.status}).`);
+      }
+      const placement = data.placement || {};
+      if (!Number.isFinite(placement.xImagePercent) || !Number.isFinite(placement.yImagePercent)) {
+        throw new Error('TROOLLM placement did not return a usable finger position.');
+      }
+      return placement;
     }
 
     async function getHandImagePayload() {
@@ -1055,6 +1088,37 @@
       ctx.restore();
       ctx.globalCompositeOperation = 'source-over';
       return canvas.toDataURL('image/png');
+    }
+
+    function createPlacementRingMaskDataUrl(width, height, placement) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const cx = clamp(Number(placement.xImagePercent || 50), 6, 94) / 100 * canvas.width;
+      const cy = clamp(Number(placement.yImagePercent || 50), 8, 92) / 100 * canvas.height;
+      const ringWidth = clamp(Number(placement.ringWidthImagePercent || 10), 5, 22) / 100 * canvas.width;
+      const maskWidth = Math.max(42, ringWidth * 1.65);
+      const maskHeight = Math.max(32, ringWidth * .96);
+      const rotation = clamp(Number(placement.rotationDeg || 0), -45, 45) * Math.PI / 180;
+
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, maskWidth / 2, maskHeight / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
+      return canvas.toDataURL('image/png');
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
     }
 
     function getBackendEndpoint(path) {
