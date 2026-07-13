@@ -88,24 +88,30 @@ function buildTryOnPrompt(payload) {
   const ringDescription = payload.ringDescription || ringName;
 
   return [
-    'You are performing a realistic jewelry virtual try-on edit.',
+    'You are an advanced, low-latency AI Image Creation and Editing Engine performing a realistic jewelry virtual try-on edit.',
+    'Core working principle: change only what the user explicitly requested and preserve everything else.',
     '',
-    'INPUTS:',
-    '1. Base image: a real customer hand photo.',
-    `2. Product reference image: the selected ring (${ringName}: ${ringDescription}).`,
+    'REFERENCE ROLES:',
+    '1. Base image: the authoritative real customer hand photo and direct edit target.',
+    `2. Product reference image: the locked selected ring SKU (${ringName}: ${ringDescription}).`,
     '3. Mask: only the small ring-placement zone on the selected finger is editable.',
     '',
     'TASK:',
     'Place the selected ring from the product reference image onto the selected finger in the base hand photo.',
     '',
+    'LOCKED / PRESERVE EXACTLY:',
+    '- Preserve the uploaded hand photo outside the mask as the authoritative reference.',
+    '- Preserve hand identity, pose, skin tone, nails, fingers, wrist, bracelet, background, lighting, camera angle, crop, focus, texture, and image quality.',
+    '- Preserve the selected ring design, geometry, dimensions, proportions, metal color, stones, setting, bead detailing, pavé line, material, reflections, and visible construction.',
+    '- Preserve the original output aspect ratio and composition of the hand photo. Do not stretch, crop, reframe, add borders, create a collage, or add watermarks.',
+    '',
     'STRICT RULES:',
-    '- Preserve the original hand photo exactly.',
-    '- Do not change the hand shape, skin tone, nails, fingers, wrist, bracelet, background, lighting, camera angle, crop, or image quality.',
     '- Edit only inside the masked ring-placement area.',
     '- Remove any existing ring/band only if it is inside the masked area.',
     '- Do not redesign the ring.',
     '- Do not create a new ring style.',
     '- Do not change the product design, metal color, gemstone placement, stone color, bead detailing, pavé line, or shape.',
+    '- Never replace the product with a similar-looking ring. Use the exact uploaded product reference.',
     '- The ring must look physically worn on the finger, not pasted on top.',
     '- The ring must wrap around the finger naturally with correct curvature.',
     '- The ring must be centered on the selected finger.',
@@ -124,11 +130,11 @@ function buildTryOnPrompt(payload) {
     'Ring position: place the ring at the natural ring-wearing area between the lower finger joint and the base of the finger.',
     'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
     '',
-    'QUALITY TARGET:',
-    'Photorealistic, natural, clean, realistic jewelry fitting, no distortion, no extra fingers, no warped nails, no changed background, no cartoon effect.',
+    'QUALITY CHECK BEFORE RETURNING:',
+    'Correct reference selected. Main subject preserved. Product not replaced or simplified. Only masked ring-placement zone changed. Realistic scale, anatomy, lighting, shadow, reflection, and perspective. No duplicate products, no extra fingers or limbs, no geometry distortion, no unwanted objects, no cartoon effect.',
     '',
     'NEGATIVE INSTRUCTIONS:',
-    'No floating ring. No flat sticker look. No oversized product. No melted jewelry. No duplicate rings. No extra gemstones. No changed hand. No changed nails. No changed skin texture. No full image regeneration.'
+    'No floating ring. No flat sticker look. No oversized product. No melted jewelry. No duplicate rings. No extra gemstones. No changed hand. No changed nails. No changed skin texture. No full image regeneration. No altered logos. No random text. No borders. No collages. No watermarks. No incorrect product colors.'
   ].join(' ');
 }
 
@@ -160,37 +166,58 @@ async function callOpenAIImageGeneration(payload) {
   }
   const maskImage = imageFromDataUrl(payload.maskImage, 'ring-edit-mask');
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180_000);
-  try {
-    const response = await callOpenAIImageEdit({
-      apiKey,
-      prompt,
-      sourceImages: [sourceImage, ringImage],
-      maskImage,
-      signal: controller.signal
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = response.status === 429
-        ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Fit Product again.'
-        : data.error?.message || data.error || `OpenAI image generation failed (${response.status}).`;
-      throw new Error(message);
-    }
+  const sourceImages = [sourceImage, ringImage];
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 180_000);
+    try {
+      const response = await callOpenAIImageEdit({
+        apiKey,
+        prompt,
+        sourceImages,
+        maskImage,
+        signal: controller.signal
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = response.status === 429
+          ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Fit Product again.'
+          : data.error?.message || data.error || `OpenAI image generation failed (${response.status}).`;
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
+      }
 
-    const imageBase64 = data.data?.[0]?.b64_json;
-    if (!imageBase64) {
-      throw new Error('OpenAI did not return a generated image.');
-    }
+      const imageBase64 = data.data?.[0]?.b64_json;
+      if (!imageBase64) {
+        const error = new Error('OpenAI did not return a generated image.');
+        error.status = response.status;
+        throw error;
+      }
 
-    return {
-      image: `data:image/${OPENAI_IMAGE_FORMAT};base64,${imageBase64}`,
-      model: OPENAI_IMAGE_MODEL,
-      provider: 'openai-gpt-image'
-    };
-  } finally {
-    clearTimeout(timeout);
+      return {
+        image: `data:image/${OPENAI_IMAGE_FORMAT};base64,${imageBase64}`,
+        model: OPENAI_IMAGE_MODEL,
+        provider: 'openai-gpt-image',
+        attempts: attempt
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= 2 || !shouldRetryImageFailure(error)) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  throw lastError || new Error('OpenAI image generation failed.');
+}
+
+function shouldRetryImageFailure(error) {
+  const message = error?.message || '';
+  if (/billing|hard limit|quota|credits|insufficient|api key|configured|invalid|content policy/i.test(message)) return false;
+  if (error?.name === 'AbortError') return false;
+  const status = Number(error?.status || 0);
+  return !status || status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
 async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, signal }) {
