@@ -10,6 +10,7 @@ const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
+const OPENAI_IMAGE_TIMEOUT_MS = Number(process.env.OPENAI_IMAGE_TIMEOUT_MS || 300_000);
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -82,8 +83,7 @@ function readJson(req) {
 }
 
 function buildTryOnPrompt(payload) {
-  const finger = payload.finger || 'ring finger';
-  const handSide = payload.handSide || 'auto-detect';
+  const finger = 'ring finger';
   const ringName = payload.ringName || 'selected MIA ring';
   const ringDescription = payload.ringDescription || ringName;
   const placement = payload.placement || {};
@@ -101,7 +101,7 @@ function buildTryOnPrompt(payload) {
     '3. Mask: only the small ring-placement zone on the selected finger is editable.',
     '',
     'TASK:',
-    'Place the selected ring from the product reference image onto the selected finger in the base hand photo.',
+    'Generate the final try-on image by placing the selected ring from the product reference image neatly on the ring finger in the base hand photo.',
     '',
     'LOCKED / PRESERVE EXACTLY:',
     '- Preserve the uploaded hand photo outside the mask as the authoritative reference.',
@@ -132,11 +132,10 @@ function buildTryOnPrompt(payload) {
     '- Keep the final output like a real e-commerce jewelry try-on photograph.',
     '',
     'PLACEMENT:',
-    `Selected finger: ${finger}`,
-    `Hand side: ${handSide}`,
+    'Selected finger: ring finger only.',
     getFingerDefinition(finger),
     placementGuide,
-    'Ring position: place the ring at the natural ring-wearing area between the lower finger joint and the base of the finger.',
+    'Ring position: fit the ring at the natural wearing area of the ring finger, between the lower finger joint and the base of the finger.',
     'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
     '',
     'QUALITY CHECK BEFORE RETURNING:',
@@ -194,7 +193,7 @@ async function callOpenAIImageGeneration(payload) {
   let lastError;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 180_000);
+    const timeout = setTimeout(() => controller.abort(), OPENAI_IMAGE_TIMEOUT_MS);
     try {
       const response = await callOpenAIImageEdit({
         apiKey,
@@ -206,7 +205,7 @@ async function callOpenAIImageGeneration(payload) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = response.status === 429
-          ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Fit Product again.'
+          ? 'OpenAI image generation is rate-limited right now. Wait a moment, then try Generate TROOLLM Image Fit again.'
           : data.error?.message || data.error || `OpenAI image generation failed (${response.status}).`;
         const error = new Error(message);
         error.status = response.status;
@@ -269,16 +268,15 @@ async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, si
 }
 
 function buildPlacementPrompt(payload) {
-  const finger = payload.finger || 'ring finger';
+  const finger = 'ring finger';
   const ringName = payload.ringName || 'selected ring';
   const ringDescription = payload.ringDescription || 'catalog ring';
   return [
     'You are a precise virtual jewelry try-on placement engine.',
     'Analyze the first image as the authoritative user hand photo and the second image as the exact selected ring product.',
     'Return only placement geometry. Do not generate, edit, or describe any image.',
-    `Target finger: ${finger}.`,
+    'Target finger: ring finger only.',
     getFingerDefinition(finger),
-    `Hand side hint: ${payload.handSide || 'auto-detect'}.`,
     `Ring product: ${ringName} (${ringDescription}).`,
     'Finger naming rule: identify the thumb position in the image first, then apply the image-space order rule exactly. Never confuse index, middle, ring, and little fingers.',
     'Coordinate guardrail: when thumb is on the right side of the image, the ring finger center is normally left of the middle finger and should usually be around x=34-48%, middle around x=46-60%, index around x=58-74%.',

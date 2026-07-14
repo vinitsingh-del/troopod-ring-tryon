@@ -506,7 +506,7 @@
         </div>
         <div class="hint-card" id="hint" style="display: none;">
           <b>Real hand reference</b>
-          <span>Upload a hand image, choose a product and finger, then place the selected ring neatly.</span>
+          <span>Upload a hand image, choose a ring, then generate the ring-finger try-on.</span>
         </div>
       </div>
 
@@ -546,28 +546,8 @@
               </button>
             </div>
           </div>
-          <div class="ai-grid">
-            <label class="ai-field">
-              Place on
-              <select id="fingerSelect">
-                <option value="ring finger">Ring finger</option>
-                <option value="index finger">Index finger</option>
-                <option value="middle finger">Middle finger</option>
-                <option value="little finger">Little finger</option>
-                <option value="thumb">Thumb</option>
-              </select>
-            </label>
-            <label class="ai-field">
-              Hand side
-              <select id="handSelect">
-                <option value="auto-detect">Auto-detect</option>
-                <option value="left hand">Left hand</option>
-                <option value="right hand">Right hand</option>
-              </select>
-            </label>
-          </div>
-          <button type="button" id="aiGenerateBtn" class="primary">Fit Product</button>
-          <div class="ai-status" id="aiStatus">Upload a hand image, choose the product and finger, then fit the ring.</div>
+          <button type="button" id="aiGenerateBtn" class="primary">Generate TROOLLM Image Fit</button>
+          <div class="ai-status" id="aiStatus">Upload a hand image, choose the ring, then generate the ring-finger fit.</div>
         </div>
 
         <div class="actions">
@@ -584,7 +564,7 @@
     </section>
 
     <div class="footer">
-      <span>TROOLLM edits only the guarded ring-placement area and keeps the uploaded hand and selected product faithful.</span>
+      <span>TROOLLM keeps the uploaded hand unchanged and fits the selected ring on the ring finger.</span>
       <span class="powered">Powered by Troopod</span>
     </div>
   </main>
@@ -600,8 +580,6 @@
     const ringCutout = document.getElementById('ringCutout');
     const hint = document.getElementById('hint');
     const fileInput = document.getElementById('fileInput');
-    const fingerSelect = document.getElementById('fingerSelect');
-    const handSelect = document.getElementById('handSelect');
     const aiGenerateBtn = document.getElementById('aiGenerateBtn');
     const aiStatus = document.getElementById('aiStatus');
     const scaleInput = null;
@@ -609,6 +587,8 @@
     const capture = document.getElementById('capture');
     const toast = document.getElementById('toast');
     const variantList = document.getElementById('variantList');
+    const TARGET_FINGER = 'ring finger';
+    const HAND_SIDE = 'auto-detect';
     const ringVariants = {
       gleam: {
         name: 'Gleam Play Diamond',
@@ -683,7 +663,7 @@
 
     function setProgressStage(stageName) {
       setAiStatus(stageName);
-      aiGenerateBtn.textContent = stageName === 'Ready' ? 'Fit Product' : stageName;
+      aiGenerateBtn.textContent = stageName === 'Ready' ? 'Generate TROOLLM Image Fit' : stageName;
     }
 
     function stopCamera() {
@@ -736,8 +716,8 @@
         ring.style.display = 'none';
         hint.style.display = 'none';
         stage.dataset.fitTap = '0';
-        setAiStatus(`Choose the finger, then tap Fit Product for ${getSelectedVariant().name}.`);
-        showToast('Photo ready. Choose the ring and finger.');
+        setAiStatus(`Choose the ring, then tap Generate TROOLLM Image Fit for ${getSelectedVariant().name}.`);
+        showToast('Photo ready. Choose the ring.');
       };
       finger.onerror = () => {
         showToast('This image could not be loaded. Try JPG or PNG.');
@@ -761,7 +741,7 @@
       stage.dataset.fitTap = '0';
       ringState = { ...defaultRing };
       applyRing();
-      setAiStatus('Upload a hand image, choose the product and finger, then let TROOLLM guide exact placement.');
+      setAiStatus('Upload a hand image, choose the ring, then generate the ring-finger fit.');
     }
 
     variantList.addEventListener('click', event => {
@@ -779,10 +759,10 @@
       if (activeImageSrc) {
         finger.style.display = 'block';
         ring.style.display = 'none';
-        setAiStatus(`Selected ${variant.name}. Choose the finger, then tap Fit Product.`);
+        setAiStatus(`Selected ${variant.name}. Tap Generate TROOLLM Image Fit.`);
       } else {
         reference.style.display = 'block';
-        setAiStatus(`Selected ${variant.name}. Upload a hand image, then tap Fit Product.`);
+        setAiStatus(`Selected ${variant.name}. Upload a hand image, then generate the fit.`);
       }
     });
 
@@ -932,7 +912,7 @@
         setAiStatus('Upload a hand image first so the product can be placed onto that hand.');
         showToast('Upload a hand image first.');
         aiGenerateBtn.disabled = false;
-        aiGenerateBtn.textContent = 'Fit Product';
+        aiGenerateBtn.textContent = 'Generate TROOLLM Image Fit';
         return;
       }
       ring.style.display = 'none';
@@ -950,7 +930,7 @@
           aiResult.style.display = 'block';
           hint.style.display = 'none';
           setProgressStage('Ready');
-          setAiStatus(`${getSelectedVariant().name} generated by TROOLLM Image on the selected finger.`);
+          setAiStatus(`${getSelectedVariant().name} generated by TROOLLM Image on the ring finger.`);
           showToast('TROOLLM output ready.');
         };
         aiResult.src = generated;
@@ -960,14 +940,14 @@
         const billingIssue = /billing|hard limit|quota|credits|insufficient/i.test(error.message || '');
         const connectionIssue = /failed to fetch|networkerror|load failed/i.test(error.message || '');
         setAiStatus(billingIssue
-          ? 'OpenAI billing limit reached. Add credits or raise the project limit, then try Fit Product again.'
+          ? 'OpenAI billing limit reached. Add credits or raise the project limit, then try Generate TROOLLM Image Fit again.'
           : connectionIssue
-            ? 'TROOLLM backend is not reachable. Start the local backend at http://127.0.0.1:8787, then try Fit Product again.'
+            ? 'TROOLLM backend is not reachable. Start the local backend at http://127.0.0.1:8787, then try Generate TROOLLM Image Fit again.'
             : (error.message || 'TROOLLM Image could not generate the try-on output.'));
         showToast(billingIssue ? 'Billing limit reached.' : connectionIssue ? 'Start local backend first.' : 'TROOLLM generation failed.');
       } finally {
         aiGenerateBtn.disabled = false;
-        aiGenerateBtn.textContent = 'Fit Product';
+        aiGenerateBtn.textContent = 'Generate TROOLLM Image Fit';
       }
     });
 
@@ -987,8 +967,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            finger: fingerSelect.value,
-            handSide: handSelect.value,
+            finger: TARGET_FINGER,
+            handSide: HAND_SIDE,
             ringName: variant.name,
             ringPrice: variant.price,
             ringDescription: variant.description,
@@ -1017,8 +997,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            finger: fingerSelect.value,
-            handSide: handSelect.value,
+            finger: TARGET_FINGER,
+            handSide: HAND_SIDE,
             ringName: variant.name,
             ringPrice: variant.price,
             ringDescription: variant.description,
@@ -1055,39 +1035,6 @@
         width: canvas.width,
         height: canvas.height
       };
-    }
-
-    function createSimpleRingMaskDataUrl(width, height) {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, width);
-      canvas.height = Math.max(1, height);
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const zones = {
-        thumb: { x: 76, y: 58, w: 18, h: 12, r: -18 },
-        'index finger': { x: 34, y: 42, w: 17, h: 11, r: -10 },
-        'middle finger': { x: 46, y: 39, w: 17, h: 11, r: -3 },
-        'ring finger': { x: 45.5, y: 40.5, w: 13, h: 8.6, r: 5 },
-        'little finger': { x: 25, y: 49, w: 16, h: 10, r: 14 }
-      };
-      const zone = zones[fingerSelect.value] || zones['ring finger'];
-      const cx = zone.x / 100 * canvas.width;
-      const cy = zone.y / 100 * canvas.height;
-      const maskWidth = zone.w / 100 * canvas.width;
-      const maskHeight = zone.h / 100 * canvas.height;
-
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(zone.r * Math.PI / 180);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, maskWidth / 2, maskHeight / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      ctx.globalCompositeOperation = 'source-over';
-      return canvas.toDataURL('image/png');
     }
 
     function createPlacementRingMaskDataUrl(width, height, placement) {
