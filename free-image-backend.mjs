@@ -9,7 +9,7 @@ const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
-const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1-mini';
+const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1';
 const OPENAI_IMAGE_TIMEOUT_MS = Number(process.env.OPENAI_IMAGE_TIMEOUT_MS || 300_000);
 
 function loadEnvFile(path) {
@@ -119,6 +119,7 @@ function buildTryOnPrompt(payload) {
     '- The visible ring face must match the uploaded product reference, including gemstone outline, prongs, cluster layout, band split, pavé details, and metal thickness.',
     '- Do not simplify a gemstone ring into a generic stone-and-band icon. Preserve the SKU-specific construction even after perspective fitting.',
     '- Only adapt scale, rotation, perspective, shadow, and wrap needed to make the same product look worn on the finger.',
+    '- Target visual style: like a clean Gemini/Nano Banana jewelry try-on reference image, with a small realistic ring neatly worn on the ring finger.',
     '- The ring must look physically worn on the finger, not pasted on top.',
     '- The ring must wrap around the finger naturally with correct curvature.',
     '- The ring must be centered on the selected finger.',
@@ -128,14 +129,15 @@ function buildTryOnPrompt(payload) {
     '- Add natural highlights and reflections matching the lighting of the hand photo.',
     '- Slightly hide/occlude the back/lower parts of the ring where they would go behind the finger.',
     '- Maintain realistic scale: the ring should sit snugly around the finger, neither floating nor oversized.',
-    '- Make the ring a slim worn chevron band, not a large object. The V-shaped front should face the camera and sit snugly across the finger width.',
+    '- The visible decorative face should cover only the ring-finger width like a real ring, not a large sticker over the hand.',
+    '- Keep the band thin and natural, tucked around the sides of the finger with subtle occlusion and contact shadow.',
     '- Keep the final output like a real e-commerce jewelry try-on photograph.',
     '',
     'PLACEMENT:',
     'Selected finger: ring finger only.',
     getFingerDefinition(finger),
     placementGuide,
-    'Ring position: fit the ring at the natural wearing area of the ring finger, between the lower finger joint and the base of the finger.',
+    'Ring position: fit the ring at the natural wearing area of the ring finger, just above the base/MCP knuckle and below the lower finger joint, matching the Gemini-style reference result.',
     'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
     '',
     'QUALITY CHECK BEFORE RETURNING:',
@@ -147,7 +149,7 @@ function buildTryOnPrompt(payload) {
 }
 
 function getFingerDefinition(finger) {
-  const imageOrderRule = 'Image-space finger order rule: if the thumb appears on the right side of the image, the visible finger order from left to right is little, ring, middle, index, thumb. If the thumb appears on the left side of the image, the visible finger order from left to right is thumb, index, middle, ring, little. Use this image-space order before choosing the selected finger.';
+  const imageOrderRule = 'Image-space finger order rule: image x=0 is the viewer-left edge and image x=100 is the viewer-right edge. If the thumb visibly protrudes on the viewer-right side of the image, the visible finger order from viewer-left to viewer-right is little, ring, middle, index, thumb. If the thumb visibly protrudes on the viewer-left side of the image, the visible finger order from viewer-left to viewer-right is thumb, index, middle, ring, little. Use this image-space order before choosing the selected finger.';
   const definitions = {
     thumb: 'Finger definition: thumb is the short outer finger at the side of the hand.',
     'index finger': 'Finger definition: index finger is directly next to the thumb, also called the pointer finger.',
@@ -278,10 +280,13 @@ function buildPlacementPrompt(payload) {
     'Target finger: ring finger only.',
     getFingerDefinition(finger),
     `Ring product: ${ringName} (${ringDescription}).`,
+    'Return thumbSide as "left" only when the thumb visibly protrudes on the image x=0/viewer-left side. Return thumbSide as "right" only when the thumb visibly protrudes on the image x=100/viewer-right side. Do not use anatomical left/right hand terminology for thumbSide.',
     'Finger naming rule: identify the thumb position in the image first, then apply the image-space order rule exactly. Never confuse index, middle, ring, and little fingers.',
     'Coordinate guardrail: when thumb is on the right side of the image, the ring finger center is normally left of the middle finger and should usually be around x=34-48%, middle around x=46-60%, index around x=58-74%.',
     'Coordinate guardrail: when thumb is on the left side of the image, index is usually around x=26-42%, middle around x=40-55%, ring around x=52-68%, little around x=64-82%.',
+    'Vertical guardrail: for an upright back-of-hand photo, the ring center should usually be around y=36-50% at the ring-finger base. Never place it down on the palm or below the MCP/base knuckle.',
     'If your selected finger name and x coordinate disagree, correct the x coordinate before returning JSON.',
+    'If yImagePercent is below the ring finger base or on the palm, correct it upward before returning JSON.',
     'Choose the center point where the ring should sit naturally on the selected finger at the ring-wearing zone, between the MCP/base knuckle and lower finger joint.',
     'Place the center on the selected finger only, not between fingers, not on the knuckle crease, not on the palm, and not on an adjacent finger.',
     'Estimate the visible ring width as a percent of the hand image width so the ring fits snugly around that finger. Use a conservative jewelry scale.',
@@ -332,10 +337,11 @@ async function callOpenAIPlacement(payload) {
               yImagePercent: { type: 'number', minimum: 0, maximum: 100 },
               ringWidthImagePercent: { type: 'number', minimum: 3, maximum: 35 },
               rotationDeg: { type: 'number', minimum: -45, maximum: 45 },
+              thumbSide: { type: 'string', enum: ['left', 'right', 'unknown'] },
               confidence: { type: 'number', minimum: 0, maximum: 1 },
               reason: { type: 'string' }
             },
-            required: ['xImagePercent', 'yImagePercent', 'ringWidthImagePercent', 'rotationDeg', 'confidence', 'reason']
+            required: ['xImagePercent', 'yImagePercent', 'ringWidthImagePercent', 'rotationDeg', 'thumbSide', 'confidence', 'reason']
           }
         }
       }
@@ -347,12 +353,40 @@ async function callOpenAIPlacement(payload) {
   }
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error('OpenAI did not return placement geometry.');
-  const placement = JSON.parse(content);
+  const placement = normalizeRingFingerPlacement(JSON.parse(content));
   return {
     provider: 'openai-gpt-placement',
     model: OPENAI_PLACEMENT_MODEL,
     placement
   };
+}
+
+function normalizeRingFingerPlacement(placement) {
+  const normalized = { ...placement };
+  const thumbSide = normalized.thumbSide;
+  normalized.xImagePercent = normalizePercent(normalized.xImagePercent);
+  normalized.yImagePercent = normalizePercent(normalized.yImagePercent);
+  normalized.ringWidthImagePercent = normalizePercent(normalized.ringWidthImagePercent);
+  const x = Number(normalized.xImagePercent);
+  if (thumbSide === 'right' && Number.isFinite(x) && (x < 34 || x > 48)) {
+    normalized.xImagePercent = 40;
+    normalized.reason = `${normalized.reason || ''} Corrected xImagePercent to 40 because thumbSide=right and the ring finger is second from viewer-left.`;
+  }
+  if (thumbSide === 'left' && Number.isFinite(x) && (x < 52 || x > 68)) {
+    normalized.xImagePercent = 60;
+    normalized.reason = `${normalized.reason || ''} Corrected xImagePercent to 60 because thumbSide=left and the ring finger is second from viewer-right.`;
+  }
+  normalized.ringWidthImagePercent = Math.min(10, Math.max(5.5, Number(normalized.ringWidthImagePercent || 7)));
+  const y = Number(normalized.yImagePercent || 46);
+  normalized.yImagePercent = y > 52 ? 46 : Math.min(52, Math.max(30, y));
+  normalized.rotationDeg = Math.min(18, Math.max(-18, Number(normalized.rotationDeg || 0)));
+  return normalized;
+}
+
+function normalizePercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return number;
+  return number > 0 && number <= 1 ? number * 100 : number;
 }
 
 async function handlePlaceRing(req, res) {
