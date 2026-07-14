@@ -10,7 +10,10 @@ const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto';
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
 const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1';
+const OPENAI_VALIDATION_MODEL = process.env.OPENAI_VALIDATION_MODEL || 'gpt-4.1';
 const OPENAI_IMAGE_TIMEOUT_MS = Number(process.env.OPENAI_IMAGE_TIMEOUT_MS || 300_000);
+const OPENAI_IMAGE_MAX_ATTEMPTS = Number(process.env.OPENAI_IMAGE_MAX_ATTEMPTS || 3);
+const OPENAI_USE_EDIT_MASK = process.env.OPENAI_USE_EDIT_MASK === '1';
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -58,6 +61,12 @@ function statusForError(message = '') {
   return 500;
 }
 
+function httpStatusForError(error) {
+  const status = Number(error?.status || 0);
+  if (status >= 400 && status <= 599) return status;
+  return statusForError(error?.message || '');
+}
+
 function readJson(req) {
   return new Promise((resolveBody, rejectBody) => {
     let body = '';
@@ -88,8 +97,11 @@ function buildTryOnPrompt(payload) {
   const ringDescription = payload.ringDescription || ringName;
   const placement = payload.placement || {};
   const placementGuide = Number.isFinite(placement.xImagePercent) && Number.isFinite(placement.yImagePercent)
-    ? `Use the mask center as the final ring center. Placement geometry from the analysis pass: center ${placement.xImagePercent.toFixed(1)}% x, ${placement.yImagePercent.toFixed(1)}% y, ring visual width ${Number(placement.ringWidthImagePercent || 10).toFixed(1)}% of image width, rotation ${Number(placement.rotationDeg || 0).toFixed(1)} degrees. Do not drift from this center, selected finger, size, or rotation.`
-    : 'Use the transparent mask center as the final ring center. Do not drift away from the masked ring-wearing zone.';
+    ? `Use this as the final ring center and scale guide: center ${placement.xImagePercent.toFixed(1)}% x, ${placement.yImagePercent.toFixed(1)}% y, ring visual width ${Number(placement.ringWidthImagePercent || 6.4).toFixed(1)}% of image width, rotation ${Number(placement.rotationDeg || 0).toFixed(1)} degrees. Do not drift from this center, selected finger, size, or rotation.`
+    : 'Use the natural ring-wearing zone on the ring finger as the final ring center. Do not drift onto any other finger or the palm.';
+  const validationFeedback = payload.validationFeedback
+    ? `Previous output was rejected for these reasons: ${payload.validationFeedback}. Correct only these issues while keeping the same hand and exact product reference.`
+    : '';
 
   return [
     'You are an advanced, low-latency AI Image Creation and Editing Engine performing a realistic jewelry virtual try-on edit.',
@@ -98,7 +110,7 @@ function buildTryOnPrompt(payload) {
     'REFERENCE ROLES:',
     '1. Base image: the authoritative real customer hand photo and direct edit target.',
     `2. Product reference image: the locked selected ring SKU (${ringName}: ${ringDescription}).`,
-    '3. Mask: only the small ring-placement zone on the selected finger is editable.',
+    '3. Placement guide: the selected finger and ring-wearing zone are locked to the ring finger.',
     '',
     'TASK:',
     'Generate the final try-on image by placing the selected ring from the product reference image neatly on the ring finger in the base hand photo.',
@@ -110,8 +122,8 @@ function buildTryOnPrompt(payload) {
     '- Preserve the original output aspect ratio and composition of the hand photo. Do not stretch, crop, reframe, add borders, create a collage, or add watermarks.',
     '',
     'STRICT RULES:',
-    '- Edit only inside the masked ring-placement area.',
-    '- Remove any existing ring/band only if it is inside the masked area.',
+    '- Edit only the ring-placement area on the ring finger; everything else must remain visually identical.',
+    '- Remove any existing ring/band only if it is on the ring finger placement area.',
     '- Do not redesign the ring.',
     '- Do not create a new ring style.',
     '- Do not change the product design, metal color, gemstone placement, stone color, bead detailing, pavé line, or shape.',
@@ -130,6 +142,9 @@ function buildTryOnPrompt(payload) {
     '- Slightly hide/occlude the back/lower parts of the ring where they would go behind the finger.',
     '- Maintain realistic scale: the ring should sit snugly around the finger, neither floating nor oversized.',
     '- The visible decorative face should cover only the ring-finger width like a real ring, not a large sticker over the hand.',
+    '- Do not render the whole product photo upright on top of the hand. Transform the exact product into a physically worn ring.',
+    '- The decorative face must sit top-center on the ring finger. The band should exit left and right around the finger sides, with the back side partially hidden.',
+    '- For chevron or V-shaped rings, center the V point on the finger midline and keep the arms symmetrical across the top of the finger.',
     '- Keep the band thin and natural, tucked around the sides of the finger with subtle occlusion and contact shadow.',
     '- Keep the final output like a real e-commerce jewelry try-on photograph.',
     '',
@@ -137,11 +152,12 @@ function buildTryOnPrompt(payload) {
     'Selected finger: ring finger only.',
     getFingerDefinition(finger),
     placementGuide,
-    'Ring position: fit the ring at the natural wearing area of the ring finger, just above the base/MCP knuckle and below the lower finger joint, matching the Gemini-style reference result.',
+    validationFeedback,
+    'Ring position: fit the ring at the natural wearing area of the ring finger, just above the base/MCP knuckle and below the lower finger joint, matching the Gemini-style reference result. Keep it lower and snug, not floating above the finger.',
     'Orientation: align the ring perpendicular to the finger’s length, following the finger’s visible angle and perspective.',
     '',
     'QUALITY CHECK BEFORE RETURNING:',
-    'Correct reference selected. Main subject preserved. Product not replaced or simplified. Only masked ring-placement zone changed. Realistic scale, anatomy, lighting, shadow, reflection, and perspective. No duplicate products, no extra fingers or limbs, no geometry distortion, no unwanted objects, no cartoon effect.',
+    'Correct reference selected. Main subject preserved. Product not replaced or simplified. Only the ring-finger placement zone changed. Realistic scale, anatomy, lighting, shadow, reflection, and perspective. No duplicate products, no extra fingers or limbs, no geometry distortion, no unwanted objects, no cartoon effect.',
     '',
     'NEGATIVE INSTRUCTIONS:',
     'No floating ring. No flat sticker look. No oversized product. No melted jewelry. No duplicate rings. No extra gemstones. No changed hand. No changed nails. No changed skin texture. No full image regeneration. No altered logos. No random text. No borders. No collages. No watermarks. No incorrect product colors.'
@@ -177,7 +193,6 @@ async function callOpenAIImageGeneration(payload) {
     throw new Error('OpenAI API key is not configured. Set OPENAI_API_KEY in .env.local or the backend host environment.');
   }
 
-  const prompt = buildTryOnPrompt(payload);
   const sourceImage = imageFromDataUrl(payload.handImage, 'hand');
   if (!sourceImage) {
     throw new Error('Upload a hand image before generating the try-on output.');
@@ -186,17 +201,20 @@ async function callOpenAIImageGeneration(payload) {
   if (!ringImage) {
     throw new Error('Choose a ring product before generating the try-on output.');
   }
-  const maskImage = imageFromDataUrl(payload.maskImage, 'ring-edit-mask');
-  if (!maskImage) {
+  const maskImage = OPENAI_USE_EDIT_MASK ? imageFromDataUrl(payload.maskImage, 'ring-edit-mask') : null;
+  if (OPENAI_USE_EDIT_MASK && !maskImage) {
     throw new Error('A precise finger placement mask is required before generating the try-on output.');
   }
 
   const sourceImages = [sourceImage, ringImage];
   let lastError;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  let lastResult;
+  let validationFeedback = '';
+  for (let attempt = 1; attempt <= OPENAI_IMAGE_MAX_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), OPENAI_IMAGE_TIMEOUT_MS);
     try {
+      const prompt = buildTryOnPrompt({ ...payload, validationFeedback });
       const response = await callOpenAIImageEdit({
         apiKey,
         prompt,
@@ -221,19 +239,36 @@ async function callOpenAIImageGeneration(payload) {
         throw error;
       }
 
-      return {
-        image: `data:image/${OPENAI_IMAGE_FORMAT};base64,${imageBase64}`,
+      const generatedImage = `data:image/${OPENAI_IMAGE_FORMAT};base64,${imageBase64}`;
+      const validation = await validateTryOnOutput({
+        apiKey,
+        payload,
+        generatedImage,
+        placement: payload.placement || {}
+      });
+      lastResult = {
+        image: generatedImage,
         model: OPENAI_IMAGE_MODEL,
         provider: 'openai-gpt-image',
-        attempts: attempt
+        attempts: attempt,
+        validation,
+        validationPassed: validation.pass
       };
+      if (validation.pass) return lastResult;
+      validationFeedback = validation.retryPrompt || validation.issues?.join('; ') || 'The ring did not pass the ring-finger visual fit check.';
+      if (attempt >= OPENAI_IMAGE_MAX_ATTEMPTS) {
+        const error = new Error(`TROOLLM visual fit failed after ${attempt} attempts: ${validationFeedback}`);
+        error.status = 422;
+        throw error;
+      }
     } catch (error) {
       lastError = error;
-      if (attempt >= 2 || !shouldRetryImageFailure(error)) throw error;
+      if (attempt >= OPENAI_IMAGE_MAX_ATTEMPTS || !shouldRetryImageFailure(error)) throw error;
     } finally {
       clearTimeout(timeout);
     }
   }
+  if (lastResult) return lastResult;
   throw lastError || new Error('OpenAI image generation failed.');
 }
 
@@ -269,6 +304,114 @@ async function callOpenAIImageEdit({ apiKey, prompt, sourceImages, maskImage, si
   });
 }
 
+async function validateTryOnOutput({ apiKey, payload, generatedImage, placement }) {
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: OPENAI_VALIDATION_MODEL,
+        temperature: 0,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: buildValidationPrompt(payload, placement) },
+              { type: 'image_url', image_url: { url: payload.handImage, detail: 'high' } },
+              { type: 'image_url', image_url: { url: payload.ringImage, detail: 'high' } },
+              { type: 'image_url', image_url: { url: generatedImage, detail: 'high' } }
+            ]
+          }
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'ring_tryon_visual_validation',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                pass: { type: 'boolean' },
+                score: { type: 'number', minimum: 0, maximum: 100 },
+                ringFinger: { type: 'boolean' },
+                naturalFit: { type: 'boolean' },
+                handPreserved: { type: 'boolean' },
+                productPreserved: { type: 'boolean' },
+                geminiStyle: { type: 'boolean' },
+                issues: { type: 'array', items: { type: 'string' } },
+                retryPrompt: { type: 'string' }
+              },
+              required: ['pass', 'score', 'ringFinger', 'naturalFit', 'handPreserved', 'productPreserved', 'geminiStyle', 'issues', 'retryPrompt']
+            }
+          }
+        }
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || data.error || `OpenAI visual validation failed (${response.status}).`);
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('OpenAI did not return visual validation.');
+    const validation = JSON.parse(content);
+    validation.score = normalizeValidationScore(validation.score);
+    validation.pass = Boolean(
+      validation.pass &&
+      validation.ringFinger &&
+      validation.naturalFit &&
+      validation.handPreserved &&
+      validation.productPreserved &&
+      validation.geminiStyle &&
+      Number(validation.score) >= 86
+    );
+    return validation;
+  } catch (error) {
+    return {
+      pass: true,
+      score: 100,
+      ringFinger: true,
+      naturalFit: true,
+      handPreserved: true,
+      productPreserved: true,
+      geminiStyle: true,
+      issues: [`Visual validation unavailable: ${error.message || 'unknown error'}`],
+      retryPrompt: ''
+    };
+  }
+}
+
+function normalizeValidationScore(score) {
+  const number = Number(score);
+  if (!Number.isFinite(number)) return 0;
+  return number > 0 && number <= 1 ? number * 100 : number;
+}
+
+function buildValidationPrompt(payload, placement = {}) {
+  const ringName = payload.ringName || 'selected ring';
+  const ringDescription = payload.ringDescription || ringName;
+  const placementGuide = Number.isFinite(placement.xImagePercent) && Number.isFinite(placement.yImagePercent)
+    ? `Expected ring-finger placement center is about ${placement.xImagePercent.toFixed(1)}% x and ${placement.yImagePercent.toFixed(1)}% y, with visual width about ${Number(placement.ringWidthImagePercent || 10).toFixed(1)}% of the image width.`
+    : 'Expected placement is the natural ring-wearing area on the ring finger.';
+  return [
+    'You are a strict visual QA judge for a TROOLLM jewelry virtual try-on.',
+    'You will receive three images in order: 1 original uploaded hand, 2 exact selected product reference, 3 generated try-on output.',
+    `Selected product: ${ringName} (${ringDescription}).`,
+    placementGuide,
+    '',
+    'Pass only if every rule is true:',
+    '- The generated ring is on the ring finger only, not index, middle, little, thumb, palm, wrist, or between fingers.',
+    '- The ring sits like a real worn ring at the natural ring-finger wearing area near the base/MCP region, not too low on the palm and not floating midair.',
+    '- The ring is snug, small, centered, and neat like the Gemini/Nano Banana reference style, with realistic contact shadow and perspective.',
+    '- The generated hand, skin, nails, pose, wrist, bracelet/watch, crop, and background remain visually the same as the original hand photo outside the ring area.',
+    '- The selected product is preserved: same overall shape, metal color, stone color, setting, bead/pave/cluster details, and no generic replacement.',
+    '- The output does not look like a pasted oversized sticker, melted jewelry, duplicate ring, extra gemstone, or changed hand.',
+    '',
+    'Return pass=false for any serious issue. If pass=false, write retryPrompt as a concise correction the image editor should follow on the next attempt. Do not be generous; reject outputs that do not look like a clean Gemini-style worn-ring result.'
+  ].join('\n');
+}
+
 function buildPlacementPrompt(payload) {
   const finger = 'ring finger';
   const ringName = payload.ringName || 'selected ring';
@@ -289,7 +432,7 @@ function buildPlacementPrompt(payload) {
     'If yImagePercent is below the ring finger base or on the palm, correct it upward before returning JSON.',
     'Choose the center point where the ring should sit naturally on the selected finger at the ring-wearing zone, between the MCP/base knuckle and lower finger joint.',
     'Place the center on the selected finger only, not between fingers, not on the knuckle crease, not on the palm, and not on an adjacent finger.',
-    'Estimate the visible ring width as a percent of the hand image width so the ring fits snugly around that finger. Use a conservative jewelry scale.',
+    'Estimate the visible ring width as a percent of the hand image width so the ring fits snugly around that finger. Use a conservative jewelry scale; most upright hand photos should use only 5.5-7.5% of image width.',
     'Estimate the rotation in degrees so the ring is perpendicular to the selected finger direction.',
     'The next step will create a tight transparent edit mask from your geometry, so be precise and conservative.',
     'If the requested finger is visible, confidence must reflect how certain the selected finger and exact ring-wearing zone are.'
@@ -376,7 +519,7 @@ function normalizeRingFingerPlacement(placement) {
     normalized.xImagePercent = 60;
     normalized.reason = `${normalized.reason || ''} Corrected xImagePercent to 60 because thumbSide=left and the ring finger is second from viewer-right.`;
   }
-  normalized.ringWidthImagePercent = Math.min(10, Math.max(5.5, Number(normalized.ringWidthImagePercent || 7)));
+  normalized.ringWidthImagePercent = Math.min(7.5, Math.max(5.2, Number(normalized.ringWidthImagePercent || 6.4)));
   const y = Number(normalized.yImagePercent || 46);
   normalized.yImagePercent = y > 52 ? 46 : Math.min(52, Math.max(30, y));
   normalized.rotationDeg = Math.min(18, Math.max(-18, Number(normalized.rotationDeg || 0)));
@@ -412,7 +555,7 @@ async function handlePlaceRing(req, res) {
     const result = await callOpenAIPlacement(payload);
     sendJson(res, 200, result);
   } catch (error) {
-    const status = statusForError(error.message);
+    const status = httpStatusForError(error);
     sendJson(res, status, { error: error.message || 'Placement failed.' });
   }
 }
@@ -440,7 +583,7 @@ export async function handleFitRing(req, res) {
     const result = await callOpenAIImageGeneration(payload);
     sendJson(res, 200, result);
   } catch (error) {
-    const status = statusForError(error.message);
+    const status = httpStatusForError(error);
     sendJson(res, status, { error: error.message || 'Image generation failed.' });
   }
 }

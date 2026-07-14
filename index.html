@@ -1047,9 +1047,9 @@
 
       const cx = clamp(Number(placement.xImagePercent || 50), 6, 94) / 100 * canvas.width;
       const cy = clamp(Number(placement.yImagePercent || 50), 8, 92) / 100 * canvas.height;
-      const ringWidth = clamp(Number(placement.ringWidthImagePercent || 10), 5, 22) / 100 * canvas.width;
-      const maskWidth = Math.max(42, ringWidth * 1.65);
-      const maskHeight = Math.max(32, ringWidth * .96);
+      const ringWidth = clamp(Number(placement.ringWidthImagePercent || 6.4), 5, 12) / 100 * canvas.width;
+      const maskWidth = Math.max(26, ringWidth * 1.18);
+      const maskHeight = Math.max(18, ringWidth * .72);
       const rotation = clamp(Number(placement.rotationDeg || 0), -45, 45) * Math.PI / 180;
 
       ctx.globalCompositeOperation = 'destination-out';

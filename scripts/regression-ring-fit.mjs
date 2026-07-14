@@ -66,8 +66,8 @@ assert(backend.includes('Target finger: ring finger only'), 'Placement prompt mu
 assert(backend.includes('Generate the final try-on image'), 'Backend prompt must describe the simplified image-generation task.');
 assert(backend.includes('Gemini/Nano Banana jewelry try-on reference'), 'Backend prompt must target the Gemini-style visual fit.');
 assert(backend.includes('visible decorative face should cover only the ring-finger width'), 'Backend prompt must prevent oversized ring output.');
-assert(backend.includes('Mask: only the small ring-placement zone'), 'Backend prompt must describe the edit mask.');
-assert(backend.includes('Use the mask center as the final ring center'), 'Backend prompt must lock image generation to placement geometry.');
+assert(backend.includes('Placement guide: the selected finger'), 'Backend prompt must describe the simplified GPT placement guide.');
+assert(backend.includes('Use this as the final ring center and scale guide'), 'Backend prompt must lock image generation to placement geometry.');
 assert(backend.includes('getFingerDefinition'), 'Backend must explicitly define selected fingers for placement.');
 assert(backend.includes('Image-space finger order rule'), 'Placement prompt must use image-space finger order.');
 assert(backend.includes('image x=0 is the viewer-left edge'), 'Placement prompt must define image-space left/right.');
@@ -80,12 +80,23 @@ assert(backend.includes('thumbSide'), 'Placement schema must return thumb side.'
 assert(backend.includes('normalizeRingFingerPlacement'), 'Backend must correct contradictory placement coordinates.');
 assert(backend.includes('normalizePercent'), 'Backend must normalize decimal placement percentages.');
 assert(backend.includes('Never confuse index, middle, ring, and little fingers'), 'Placement prompt must protect finger selection.');
-assert(backend.includes('A precise finger placement mask is required'), 'Backend must require a placement mask.');
+assert(backend.includes('OPENAI_USE_EDIT_MASK'), 'Backend must keep edit-mask mode optional instead of forcing it.');
 assert(backend.includes('visible ring face must match the uploaded product reference'), 'Backend prompt must protect visible product-face fidelity.');
 assert(backend.includes('Do not simplify a gemstone ring'), 'Backend prompt must prevent generic product simplification.');
 assert(backend.includes('Do not redesign the ring'), 'Backend prompt must protect product design.');
 assert(backend.includes('No full image regeneration'), 'Backend prompt must prevent full-image regeneration.');
 assert(backend.includes('shouldRetryImageFailure'), 'Backend must retry transient image generation failures once.');
+assert(backend.includes('OPENAI_VALIDATION_MODEL'), 'Backend must use a GPT visual validation model.');
+assert(backend.includes('OPENAI_IMAGE_MAX_ATTEMPTS'), 'Backend must retry rejected visual fits.');
+assert(backend.includes('validateTryOnOutput'), 'Backend must run a visual fit check after image generation.');
+assert(backend.includes('ring_tryon_visual_validation'), 'Backend visual validation must use structured output.');
+assert(backend.includes('normalizeValidationScore'), 'Backend must normalize 0-1 and 0-100 visual QA scores.');
+assert(backend.includes('httpStatusForError'), 'Backend must preserve explicit error statuses.');
+assert(backend.includes('ringFinger'), 'Validation must check that the output uses the ring finger.');
+assert(backend.includes('naturalFit'), 'Validation must check that the ring is naturally fitted.');
+assert(backend.includes('productPreserved'), 'Validation must check product fidelity.');
+assert(backend.includes('geminiStyle'), 'Validation must check the Gemini-style quality target.');
+assert(backend.includes('validationFeedback'), 'Backend must feed rejected-output reasons into the retry prompt.');
 assert(backend.includes("OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || 'auto'"), 'Image size should default to auto instead of forcing square output.');
 assert(!html.includes('function createSimpleRingMaskDataUrl'), 'Frontend should not use the old static finger mask.');
 assert(html.includes('const maxSide = 832'), 'Hand upload should be resized for faster fitting.');
@@ -95,8 +106,8 @@ assert(html.includes("setProgressStage('Reading reference')"), 'Frontend must sh
 assert(html.includes("setProgressStage('Creating image')"), 'Frontend must show the Creating image progress stage.');
 assert(html.includes("setProgressStage('Preparing preview')"), 'Frontend must show the Preparing preview progress stage.');
 assert(html.includes("setProgressStage('Ready')"), 'Frontend must show the Ready progress stage.');
-assert(html.includes('ringWidth * 1.65'), 'Placement mask should be wide enough for product face details.');
-assert(html.includes('ringWidth * .96'), 'Placement mask should be tall enough for gemstone and prong details.');
+assert(html.includes('ringWidth * 1.18'), 'Placement mask should stay tight enough to prevent oversized product faces.');
+assert(html.includes('ringWidth * .72'), 'Placement mask should stay compact around the ring-wearing zone.');
 assert(backend.includes('function statusForError'), 'Backend must classify provider error statuses.');
 assert(backend.includes('return 402'), 'Backend must return 402 for billing/quota failures.');
 assert(html.includes('OpenAI billing limit reached'), 'Frontend must show billing-limit failures clearly.');
@@ -104,6 +115,9 @@ assert(html.includes('Billing limit reached.'), 'Frontend toast must show billin
 assert(html.includes('TROOLLM backend is not reachable'), 'Frontend must explain when the local backend is not running.');
 assert(html.includes('Start local backend first.'), 'Frontend toast must explain backend connection failures.');
 assert(backend.includes('small realistic ring neatly worn'), 'Backend prompt should keep the ring small and neatly worn.');
+assert(backend.includes('whole product photo upright'), 'Backend prompt must prevent upright pasted-product outputs.');
+assert(backend.includes('top-center on the ring finger'), 'Backend prompt must center the ring face on the finger.');
+assert(backend.includes('TROOLLM visual fit failed'), 'Backend must reject outputs that fail visual QA after retries.');
 assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
 assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');
 
