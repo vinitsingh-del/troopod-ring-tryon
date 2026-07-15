@@ -634,7 +634,7 @@ if (isDirectRun) {
     }
     serveStatic(req, res);
   });
-  server.listen(PORT, '127.0.0.1', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`TrooPod ring try-on running at http://127.0.0.1:${PORT}`);
   });
 }
