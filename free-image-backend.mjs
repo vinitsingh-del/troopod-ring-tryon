@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || '0.0.0.0';
 const WORKSPACE = resolve(process.cwd());
 const ENV_PATH = resolve(WORKSPACE, '.env.local');
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
@@ -634,7 +635,7 @@ if (isDirectRun) {
     }
     serveStatic(req, res);
   });
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`TrooPod ring try-on running at http://127.0.0.1:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`TrooPod ring try-on running at http://${HOST}:${PORT}`);
   });
 }

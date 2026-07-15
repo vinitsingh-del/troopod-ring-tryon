@@ -486,7 +486,7 @@
       .hint-card b { font-size: 17px; }
     }
   </style>
-<script>window.TROOPOD_BACKEND_URL = "https://troopod-ring-tryon-production.up.railway.app";</script>
+<script>window.TROOPOD_BACKEND_URL = "https://troopod-ring-tryon-backend-production.up.railway.app";</script>
 </head>
 <body>
   <main class="tool" aria-labelledby="title">
@@ -1071,11 +1071,12 @@
 
     function getBackendEndpoint(path) {
       const cleanedPath = path.startsWith('/') ? path : `/${path}`;
+      const productionBackendUrl = 'https://troopod-ring-tryon-backend-production.up.railway.app';
       if (window.TROOPOD_BACKEND_URL) {
         return `${String(window.TROOPOD_BACKEND_URL).replace(/\/$/, '')}${cleanedPath}`;
       }
       if (/\.github\.io$/i.test(location.hostname)) {
-        return `http://127.0.0.1:8787${cleanedPath}`;
+        return `${productionBackendUrl}${cleanedPath}`;
       }
       return cleanedPath;
     }
