@@ -983,11 +983,33 @@
         throw new Error(`Failed to fetch TROOLLM backend at ${endpoint}.`);
       }
       const data = await response.json().catch(() => ({}));
+      if (response.status === 202 && data.id) {
+        const job = await pollFitJob(data.id);
+        if (job.status === 'error') {
+          throw new Error(job.error || 'TROOLLM Image generation failed.');
+        }
+        if (!job.result?.image) throw new Error('TROOLLM Image did not return a try-on image.');
+        return job.result.image;
+      }
       if (!response.ok) {
         throw new Error(data.error || `TROOLLM Image generation failed (${response.status}).`);
       }
       if (!data.image) throw new Error('TROOLLM Image did not return a try-on image.');
       return data.image;
+    }
+
+    async function pollFitJob(jobId) {
+      const endpoint = getBackendEndpoint(`/api/fit-ring/status?id=${encodeURIComponent(jobId)}`);
+      const started = Date.now();
+      while (Date.now() - started < 8 * 60 * 1000) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        const response = await fetch(endpoint);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `TROOLLM Image generation failed (${response.status}).`);
+        if (data.status === 'done' || data.status === 'error') return data;
+        setProgressStage('Creating image');
+      }
+      throw new Error('TROOLLM Image generation is taking too long. Try again with a smaller hand photo.');
     }
 
     async function getGptFingerPlacement(handImage, ringImage, variant) {

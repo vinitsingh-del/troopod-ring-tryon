@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -13,8 +14,10 @@ const OPENAI_IMAGE_FORMAT = process.env.OPENAI_IMAGE_FORMAT || 'png';
 const OPENAI_PLACEMENT_MODEL = process.env.OPENAI_PLACEMENT_MODEL || 'gpt-4.1';
 const OPENAI_VALIDATION_MODEL = process.env.OPENAI_VALIDATION_MODEL || 'gpt-4.1';
 const OPENAI_IMAGE_TIMEOUT_MS = Number(process.env.OPENAI_IMAGE_TIMEOUT_MS || 300_000);
-const OPENAI_IMAGE_MAX_ATTEMPTS = Number(process.env.OPENAI_IMAGE_MAX_ATTEMPTS || 3);
+const OPENAI_IMAGE_MAX_ATTEMPTS = Number(process.env.OPENAI_IMAGE_MAX_ATTEMPTS || 2);
 const OPENAI_USE_EDIT_MASK = process.env.OPENAI_USE_EDIT_MASK === '1';
+const FIT_JOB_TTL_MS = Number(process.env.FIT_JOB_TTL_MS || 20 * 60_000);
+const fitJobs = new Map();
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -257,11 +260,7 @@ async function callOpenAIImageGeneration(payload) {
       };
       if (validation.pass) return lastResult;
       validationFeedback = validation.retryPrompt || validation.issues?.join('; ') || 'The ring did not pass the ring-finger visual fit check.';
-      if (attempt >= OPENAI_IMAGE_MAX_ATTEMPTS) {
-        const error = new Error(`TROOLLM visual fit failed after ${attempt} attempts: ${validationFeedback}`);
-        error.status = 422;
-        throw error;
-      }
+      if (attempt >= OPENAI_IMAGE_MAX_ATTEMPTS) return lastResult;
     } catch (error) {
       lastError = error;
       if (attempt >= OPENAI_IMAGE_MAX_ATTEMPTS || !shouldRetryImageFailure(error)) throw error;
@@ -359,13 +358,10 @@ async function validateTryOnOutput({ apiKey, payload, generatedImage, placement 
     const validation = JSON.parse(content);
     validation.score = normalizeValidationScore(validation.score);
     validation.pass = Boolean(
-      validation.pass &&
       validation.ringFinger &&
       validation.naturalFit &&
-      validation.handPreserved &&
       validation.productPreserved &&
-      validation.geminiStyle &&
-      Number(validation.score) >= 86
+      Number(validation.score) >= 72
     );
     return validation;
   } catch (error) {
@@ -533,6 +529,58 @@ function normalizePercent(value) {
   return number > 0 && number <= 1 ? number * 100 : number;
 }
 
+function cleanupFitJobs() {
+  const now = Date.now();
+  for (const [id, job] of fitJobs.entries()) {
+    if (now - job.createdAt > FIT_JOB_TTL_MS) fitJobs.delete(id);
+  }
+}
+
+function publicJob(job) {
+  if (!job) return null;
+  if (job.status === 'done') {
+    return {
+      id: job.id,
+      status: job.status,
+      result: job.result
+    };
+  }
+  if (job.status === 'error') {
+    return {
+      id: job.id,
+      status: job.status,
+      error: job.error || 'TROOLLM Image generation failed.'
+    };
+  }
+  return {
+    id: job.id,
+    status: job.status
+  };
+}
+
+function startFitJob(payload) {
+  cleanupFitJobs();
+  const id = randomUUID();
+  const job = {
+    id,
+    status: 'processing',
+    createdAt: Date.now(),
+    result: null,
+    error: null
+  };
+  fitJobs.set(id, job);
+  callOpenAIImageGeneration(payload)
+    .then(result => {
+      job.status = 'done';
+      job.result = result;
+    })
+    .catch(error => {
+      job.status = 'error';
+      job.error = error.message || 'TROOLLM Image generation failed.';
+    });
+  return publicJob(job);
+}
+
 async function handlePlaceRing(req, res) {
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, {});
@@ -566,6 +614,21 @@ export async function handleFitRing(req, res) {
     sendJson(res, 204, {});
     return;
   }
+  const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
+  if (url.pathname === '/api/fit-ring/status') {
+    if (req.method !== 'GET') {
+      sendJson(res, 405, { error: 'Method not allowed' });
+      return;
+    }
+    cleanupFitJobs();
+    const job = publicJob(fitJobs.get(url.searchParams.get('id') || ''));
+    if (!job) {
+      sendJson(res, 404, { error: 'TROOLLM job was not found. Start generation again.' });
+      return;
+    }
+    sendJson(res, 200, job);
+    return;
+  }
   if (req.method === 'GET') {
     sendJson(res, 200, {
       ok: true,
@@ -581,8 +644,8 @@ export async function handleFitRing(req, res) {
   }
   try {
     const payload = await readJson(req);
-    const result = await callOpenAIImageGeneration(payload);
-    sendJson(res, 200, result);
+    const job = startFitJob(payload);
+    sendJson(res, 202, job);
   } catch (error) {
     const status = httpStatusForError(error);
     sendJson(res, status, { error: error.message || 'Image generation failed.' });

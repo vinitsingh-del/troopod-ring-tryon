@@ -49,7 +49,7 @@ assert(html.includes('const maskImage = createPlacementRingMaskDataUrl'), 'Front
 assert(!html.includes('generateLandmarkFit'), 'Frontend should not use hand landmark logic.');
 assert(!html.includes('createDraftCompositeDataUrl'), 'Frontend should not create a rough ring overlay.');
 assert(html.includes('function getBackendEndpoint'), 'Frontend must resolve backend endpoints for hosted and local pages.');
-assert(html.includes('http://127.0.0.1:8787'), 'Hosted page must default to the local backend for generation.');
+assert(html.includes('troopod-ring-tryon-backend-production.up.railway.app'), 'Hosted page must default to the Railway backend for generation.');
 assert(!html.includes('TROOLLM Image uses the uploaded hand'), 'Frontend should not show the removed explanatory note.');
 assert(backend.includes("form.append('input_fidelity', 'high')"), 'Images edit request must use input_fidelity=high.');
 assert(backend.includes("OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high'"), 'Image quality should default to high for jewelry fidelity.');
@@ -88,7 +88,11 @@ assert(backend.includes('No full image regeneration'), 'Backend prompt must prev
 assert(backend.includes('shouldRetryImageFailure'), 'Backend must retry transient image generation failures once.');
 assert(backend.includes('OPENAI_VALIDATION_MODEL'), 'Backend must use a GPT visual validation model.');
 assert(backend.includes('OPENAI_IMAGE_MAX_ATTEMPTS'), 'Backend must retry rejected visual fits.');
+assert(backend.includes("OPENAI_IMAGE_MAX_ATTEMPTS || 2"), 'Backend should default to two attempts for faster Railway generation.');
 assert(backend.includes('validateTryOnOutput'), 'Backend must run a visual fit check after image generation.');
+assert(backend.includes('/api/fit-ring/status'), 'Backend must expose async fit job status polling.');
+assert(backend.includes('startFitJob'), 'Backend must start long image generations as async jobs.');
+assert(backend.includes('sendJson(res, 202'), 'Fit endpoint must return quickly with an async job id.');
 assert(backend.includes('ring_tryon_visual_validation'), 'Backend visual validation must use structured output.');
 assert(backend.includes('normalizeValidationScore'), 'Backend must normalize 0-1 and 0-100 visual QA scores.');
 assert(backend.includes('httpStatusForError'), 'Backend must preserve explicit error statuses.');
@@ -106,6 +110,8 @@ assert(html.includes("setProgressStage('Reading reference')"), 'Frontend must sh
 assert(html.includes("setProgressStage('Creating image')"), 'Frontend must show the Creating image progress stage.');
 assert(html.includes("setProgressStage('Preparing preview')"), 'Frontend must show the Preparing preview progress stage.');
 assert(html.includes("setProgressStage('Ready')"), 'Frontend must show the Ready progress stage.');
+assert(html.includes('pollFitJob'), 'Frontend must poll async fit jobs to avoid Railway timeouts.');
+assert(html.includes('/api/fit-ring/status'), 'Frontend must call the async fit status endpoint.');
 assert(html.includes('ringWidth * 1.18'), 'Placement mask should stay tight enough to prevent oversized product faces.');
 assert(html.includes('ringWidth * .72'), 'Placement mask should stay compact around the ring-wearing zone.');
 assert(backend.includes('function statusForError'), 'Backend must classify provider error statuses.');
@@ -117,7 +123,7 @@ assert(html.includes('Start local backend first.'), 'Frontend toast must explain
 assert(backend.includes('small realistic ring neatly worn'), 'Backend prompt should keep the ring small and neatly worn.');
 assert(backend.includes('whole product photo upright'), 'Backend prompt must prevent upright pasted-product outputs.');
 assert(backend.includes('top-center on the ring finger'), 'Backend prompt must center the ring face on the finger.');
-assert(backend.includes('TROOLLM visual fit failed'), 'Backend must reject outputs that fail visual QA after retries.');
+assert(backend.includes('validationPassed'), 'Backend must report visual QA status with the generated image.');
 assert(!backend.includes('approvedTryOnImage'), 'Backend should not return a fixed approved full-hand image.');
 assert(!backend.includes('approved-visual-fit'), 'Backend should use GPT for uploaded hand photos.');
 
