@@ -943,7 +943,7 @@
         setAiStatus(billingIssue
           ? 'OpenAI billing limit reached. Add credits or raise the project limit, then try Generate TROOLLM Image Fit again.'
           : connectionIssue
-            ? 'TROOLLM backend is not reachable. Start the local backend at http://127.0.0.1:8787, then try Generate TROOLLM Image Fit again.'
+            ? 'TROOLLM backend is not reachable. Wait a moment and try Generate TROOLLM Image Fit again.'
             : (error.message || 'TROOLLM Image could not generate the try-on output.'));
         showToast(billingIssue ? 'Billing limit reached.' : connectionIssue ? 'Start local backend first.' : 'TROOLLM generation failed.');
       } finally {
